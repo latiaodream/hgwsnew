@@ -46,8 +46,7 @@ export class CrownScraper {
       httpsAgent: proxyAgent || new https.Agent({ rejectUnauthorized: false }),
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': userAgent,
-        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+        'User-Agent': userAgent
       },
     });
 
@@ -98,8 +97,12 @@ export class CrownScraper {
     const paths = [
       `/transform.php?ver=${this.version}`,
       `/transform.php`,
+      `/api/transform.php?ver=${this.version}`,
+      `/api/transform.php`,
       `/app/member/transform.php?ver=${this.version}`,
       `/app/member/transform.php`,
+      `/app/member/api/transform.php?ver=${this.version}`,
+      `/app/member/api/transform.php`,
     ];
 
     let lastErr: any = null;
@@ -265,6 +268,28 @@ export class CrownScraper {
   }
 
   /**
+   * 预热站点以拿到必要 Cookie（有些站点需要进入 /app/member/ 才会下发路由/语言相关 Cookie）
+   */
+  private async warmUp(): Promise<void> {
+    const warmPaths = [
+      '/',
+      '/app/member/',
+      '/app/member/mem_login.php?langx=zh-tw',
+      '/app/member/index.php?langx=zh-tw'
+    ];
+    for (const p of warmPaths) {
+      try {
+        await this.client.get(p);
+        logger.debug(`[${this.account.showType}] 预热: GET ${p} 成功`);
+      } catch (e: any) {
+        const s = e?.response?.status;
+        logger.debug(`[${this.account.showType}] 预热: GET ${p} 失败${s ? '，状态 ' + s : ''}`);
+        // 失败继续尝试下一个预热路径
+      }
+    }
+  }
+
+  /**
    * 登录皇冠账号
    */
   async login(): Promise<boolean> {
@@ -273,9 +298,9 @@ export class CrownScraper {
       try {
         logger.info(`[${this.account.showType}] 🔐 开始登录: ${this.account.username} @ ${this.baseUrl}`);
 
-        // 访问首页预热（拿 Cookie）
+        // 预热（首页 + /app/member/...）
         try {
-          await this.client.get('/');
+          await this.warmUp();
         } catch (_) { /* 忽略 */ }
 
         // 获取最新版本号
