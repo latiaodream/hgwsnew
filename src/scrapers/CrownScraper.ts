@@ -618,13 +618,5 @@ export class CrownScraper {
     return this.isLoggedIn;
   }
 
-  /**
-   * 登出
-   */
-  logout(): void {
-    this.isLoggedIn = false;
-    this.cookies = '';
-    logger.info(`[${this.account.showType}] 已登出`);
-  }
 }
 
