@@ -197,15 +197,15 @@ export class WSServer {
     // 添加订阅
     showTypes.forEach(type => client.subscriptions.add(type));
 
-    // 发送全量数据
-    const matches = showTypes.flatMap(type => 
-      this.scraperManager.getMatches(type)
-    );
+    // 为每个 showType 分别发送全量数据
+    showTypes.forEach(showType => {
+      const matches = this.scraperManager.getMatches(showType);
 
-    this.sendMessage(client, {
-      type: MessageType.FULL_DATA,
-      data: { matches },
-      timestamp: Date.now(),
+      this.sendMessage(client, {
+        type: MessageType.FULL_DATA,
+        data: { showType, matches },
+        timestamp: Date.now(),
+      });
     });
 
     logger.info(`客户端订阅: ${client.id}, 类型: ${showTypes.join(', ')}`);
