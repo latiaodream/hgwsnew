@@ -173,39 +173,17 @@ export class CrownScraper {
    * 获取版本号
    */
   private async getVersion(): Promise<void> {
-    // 依次在 siteUrl 候选上尝试获取版本号
-    const userAgent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1';
-    const proxyAgent = this.createProxyAgent();
-
-    for (let i = 0; i < this.siteUrlCandidates.length; i++) {
-      const url = this.siteUrlCandidates[i];
-      try {
-        const resp = await axios.get(`${url}/`, {
-          headers: {
-            'User-Agent': userAgent,
-            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-          },
-          timeout: 15000,
-          httpsAgent: proxyAgent || new https.Agent({ rejectUnauthorized: false }),
-          validateStatus: (s) => s >= 200 && s < 500,
-        });
-        const html = resp.data || '';
-        const m1 = html.match(/top\.ver\s*=\s*'([^']+)'/);
-        const m2 = m1 ? null : html.match(/ver=([^&"']+)/);
-        const ver = (m1?.[1] || m2?.[1])?.trim();
-        if (ver) {
-          this.version = ver;
-          this.siteUrl = url;
-          logger.debug(`[${this.account.showType}] 获取版本号成功: ${this.version} @ ${this.siteUrl}`);
-          return;
-        }
-      } catch (e: any) {
-        logger.warn(`[${this.account.showType}] 获取版本号失败 @ ${url}: ${e?.message || e}`);
-        continue;
-      }
+    // 优先使用环境变量指定的版本号
+    const envVersion = process.env.CROWN_API_VERSION;
+    if (envVersion) {
+      this.version = envVersion.trim();
+      logger.debug(`[${this.account.showType}] 使用环境变量版本号: ${this.version}`);
+      return;
     }
-    logger.warn(`[${this.account.showType}] 获取版本号失败，使用默认值`);
+
+    // 直接使用默认版本号（皇冠首页需要 JS 跳转，无法直接获取版本号）
     this.version = '2025-10-16-fix342_120';
+    logger.debug(`[${this.account.showType}] 使用默认版本号: ${this.version}`);
   }
 
   /**
