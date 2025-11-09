@@ -17,16 +17,16 @@ export class CrownScraper {
 
   constructor(account: AccountConfig) {
     this.account = account;
+
+    const baseURL = process.env.CROWN_API_BASE_URL || 'https://hga038.com';
+    const userAgent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1';
+
     this.client = axios.create({
-      baseURL: process.env.CROWN_API_BASE_URL || 'https://api.example.com',
+      baseURL,
       timeout: 30000,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
-        'Accept': '*/*',
-        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
         'Content-Type': 'application/x-www-form-urlencoded',
-        'Origin': process.env.CROWN_API_BASE_URL || 'https://api.example.com',
-        'Referer': `${process.env.CROWN_API_BASE_URL || 'https://api.example.com'}/`,
+        'User-Agent': userAgent,
       },
     });
 
@@ -40,7 +40,7 @@ export class CrownScraper {
             return parts[0];
           });
           this.cookies = cookieValues.join('; ');
-          logger.debug(`[${this.account.showType}] 保存 Cookie: ${this.cookies}`);
+          logger.debug(`[${this.account.showType}] 保存 Cookie`);
         }
         return response;
       },
@@ -96,11 +96,11 @@ export class CrownScraper {
   private async getBlackBox(): Promise<string> {
     // 生成类似真实 BlackBox 的字符串
     const timestamp = Date.now();
-    const random1 = Math.random().toString(36).substring(2, 15);
-    const random2 = Math.random().toString(36).substring(2, 15);
-    const random3 = Math.random().toString(36).substring(2, 10);
-    const random4 = Math.random().toString(36).substring(2, 10);
-    const random5 = Math.random().toString(36).substring(2, 10);
+    const random1 = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    const random2 = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    const random3 = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    const random4 = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    const random5 = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
     const fakeBlackBox = `0400${random1}${random2}@${random3}@${random4};${random5}${timestamp}`;
     logger.debug(`[${this.account.showType}] 生成 BlackBox，长度: ${fakeBlackBox.length}`);
@@ -129,20 +129,10 @@ export class CrownScraper {
    */
   async login(): Promise<boolean> {
     try {
-      logger.info(`[${this.account.showType}] 开始登录账号: ${this.account.username}`);
-      logger.info(`[${this.account.showType}] API 地址: ${this.client.defaults.baseURL}`);
+      logger.info(`[${this.account.showType}] 🔐 开始登录: ${this.account.username}`);
 
-      // 先访问首页获取初始 Cookie
-      try {
-        logger.debug(`[${this.account.showType}] 访问首页获取 Cookie...`);
-        await this.client.get('/app/member/FT_browse/index.php?rtype=r&langx=zh-tw');
-      } catch (error: any) {
-        logger.warn(`[${this.account.showType}] 访问首页失败: ${error.message}`);
-      }
-
-      // 获取版本号
+      // 获取最新版本号
       await this.getVersion();
-      logger.info(`[${this.account.showType}] 使用版本号: ${this.version}`);
 
       // 获取 BlackBox
       const blackbox = await this.getBlackBox();
@@ -154,7 +144,7 @@ export class CrownScraper {
       // 构建请求参数
       const params = new URLSearchParams({
         p: 'chk_login',
-        langx: 'zh-tw',
+        langx: 'zh-tw',  // 使用繁体中文版本
         ver: this.version,
         username: this.account.username,
         password: this.account.password,
@@ -164,40 +154,44 @@ export class CrownScraper {
         userAgent: encodedUA,
       });
 
-      logger.debug(`[${this.account.showType}] 发送登录请求...`);
-      logger.debug(`[${this.account.showType}] 请求 URL: /transform.php?ver=${this.version}`);
-      logger.debug(`[${this.account.showType}] 请求参数: p=${params.get('p')}, langx=${params.get('langx')}, username=${params.get('username')}`);
-
+      logger.debug(`[${this.account.showType}] 🔄 尝试登录...`);
       const response = await this.client.post(`/transform.php?ver=${this.version}`, params.toString());
-
-      logger.debug(`[${this.account.showType}] 响应状态码: ${response.status}`);
-      logger.debug(`[${this.account.showType}] 响应数据 (前 500 字符): ${response.data.substring(0, 500)}`);
-
       const data = await this.parseXmlResponse(response.data);
 
-      logger.info(`[${this.account.showType}] 登录响应:`, {
-        status: data.status,
-        msg: data.msg,
-        username: data.username,
-        uid: data.uid,
+      const loginResponse = data as any;
+      logger.info(`[${this.account.showType}] 📥 登录响应:`, {
+        status: loginResponse.status,
+        msg: loginResponse.msg,
+        username: loginResponse.username,
+        uid: loginResponse.uid,
       });
 
-      // 检查登录是否成功
-      if (data.msg === '100' || data.msg === '109' || data.status === 'success') {
+      // msg=100 或 109 表示登录成功
+      if (loginResponse.msg === '100' && loginResponse.status !== 'success') {
+        loginResponse.status = 'success';
+      }
+
+      if (loginResponse.status === 'success' || loginResponse.msg === '100' || loginResponse.msg === '109') {
         this.isLoggedIn = true;
-        this.uid = data.uid;
-        this.cookies = response.headers['set-cookie']?.join('; ') || '';
+        this.uid = loginResponse.uid;
         logger.info(`[${this.account.showType}] ✅ 登录成功，UID: ${this.uid}`);
         return true;
       }
 
-      logger.error(`[${this.account.showType}] ❌ 登录失败: ${data.msg || data.err || '未知错误'}`);
+      // 检查是否需要修改密码
+      if (loginResponse.msg === '109') {
+        logger.warn(`[${this.account.showType}] ⚠️ 需要修改密码`);
+        return false;
+      }
+
+      logger.error(`[${this.account.showType}] ❌ 登录失败: ${loginResponse.msg || loginResponse.err || '未知错误'}`);
       return false;
     } catch (error: any) {
       logger.error(`[${this.account.showType}] ❌ 登录异常: ${error.message}`);
       if (error.response) {
         logger.error(`[${this.account.showType}] 响应状态码: ${error.response.status}`);
-        logger.error(`[${this.account.showType}] 响应数据: ${JSON.stringify(error.response.data).substring(0, 500)}`);
+        logger.error(`[${this.account.showType}] 响应头: ${JSON.stringify(error.response.headers)}`);
+        logger.error(`[${this.account.showType}] 响应数据: ${typeof error.response.data === 'string' ? error.response.data.substring(0, 500) : JSON.stringify(error.response.data)}`);
       }
       return false;
     }
