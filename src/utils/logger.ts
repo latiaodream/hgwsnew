@@ -15,18 +15,15 @@ export const logger = winston.createLogger({
     // 写入所有日志到 combined.log
     new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
     new winston.transports.File({ filename: 'logs/combined.log' }),
+    // 始终输出到控制台
+    new winston.transports.Console({
+      format: winston.format.combine(
+        winston.format.colorize(),
+        winston.format.simple()
+      ),
+    }),
   ],
 });
-
-// 如果不是生产环境，也输出到控制台
-if (process.env.NODE_ENV !== 'production') {
-  logger.add(new winston.transports.Console({
-    format: winston.format.combine(
-      winston.format.colorize(),
-      winston.format.simple()
-    ),
-  }));
-}
 
 export default logger;
 

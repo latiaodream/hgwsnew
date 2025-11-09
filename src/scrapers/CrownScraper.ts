@@ -187,12 +187,25 @@ export class CrownScraper {
       logger.error(`[${this.account.showType}] ❌ 登录失败: ${loginResponse.msg || loginResponse.err || '未知错误'}`);
       return false;
     } catch (error: any) {
-      logger.error(`[${this.account.showType}] ❌ 登录异常: ${error.message}`);
+      const errorMsg = error.message || String(error);
+      logger.error(`[${this.account.showType}] ❌ 登录异常: ${errorMsg}`);
+
       if (error.response) {
         logger.error(`[${this.account.showType}] 响应状态码: ${error.response.status}`);
-        logger.error(`[${this.account.showType}] 响应头: ${JSON.stringify(error.response.headers)}`);
-        logger.error(`[${this.account.showType}] 响应数据: ${typeof error.response.data === 'string' ? error.response.data.substring(0, 500) : JSON.stringify(error.response.data)}`);
+        logger.error(`[${this.account.showType}] 响应状态文本: ${error.response.statusText || ''}`);
+
+        const responseData = error.response.data;
+        if (typeof responseData === 'string') {
+          logger.error(`[${this.account.showType}] 响应数据: ${responseData.substring(0, 500)}`);
+        } else {
+          logger.error(`[${this.account.showType}] 响应数据: ${JSON.stringify(responseData)}`);
+        }
       }
+
+      if (error.code) {
+        logger.error(`[${this.account.showType}] 错误代码: ${error.code}`);
+      }
+
       return false;
     }
   }
