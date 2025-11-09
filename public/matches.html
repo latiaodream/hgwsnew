@@ -203,8 +203,11 @@
         let currentType = 'live';
         let matches = { live: [], today: [], early: [] };
 
-        const WS_URL = 'ws://localhost:8080';
-        const AUTH_TOKEN = 'your-token-here';
+        // 自动检测 WebSocket 地址
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.hostname;
+        const WS_URL = `${protocol}//${host}`;
+        const AUTH_TOKEN = 'your-token-here';  // 请在服务器上修改为实际 Token
 
         function connect() {
             ws = new WebSocket(WS_URL);
