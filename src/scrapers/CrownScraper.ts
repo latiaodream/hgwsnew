@@ -211,6 +211,23 @@ export class CrownScraper {
   }
 
   /**
+   * 按类型获取赛事列表（用于轮询模式）
+   */
+  async fetchMatchesByType(showType: ShowType): Promise<Match[]> {
+    // 临时修改 showType
+    const originalShowType = this.account.showType;
+    this.account.showType = showType;
+
+    try {
+      const matches = await this.fetchMatches();
+      return matches;
+    } finally {
+      // 恢复原始 showType
+      this.account.showType = originalShowType;
+    }
+  }
+
+  /**
    * 获取赛事列表
    */
   async fetchMatches(): Promise<Match[]> {

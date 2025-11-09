@@ -12,6 +12,9 @@ export class ScraperManager extends EventEmitter {
   private intervals: Map<ShowType, NodeJS.Timeout> = new Map();
   private matchesCache: Map<ShowType, Map<string, Match>> = new Map();
   private status: Map<ShowType, ScraperStatus> = new Map();
+  private sharedScraper: CrownScraper | null = null; // 共享的抓取器
+  private currentShowType: ShowType = 'live'; // 当前抓取的类型
+  private showTypeQueue: ShowType[] = ['live', 'today', 'early']; // 轮询队列
 
   constructor() {
     super();
@@ -38,6 +41,12 @@ export class ScraperManager extends EventEmitter {
    * 添加抓取器
    */
   addScraper(account: AccountConfig): void {
+    // 检查是否所有账号都相同
+    if (!this.sharedScraper) {
+      this.sharedScraper = new CrownScraper(account);
+      logger.info(`创建共享抓取器 (账号: ${account.username})`);
+    }
+
     const scraper = new CrownScraper(account);
     this.scrapers.set(account.showType, scraper);
     logger.info(`添加抓取器: ${account.showType} (账号: ${account.username})`);
@@ -48,9 +57,92 @@ export class ScraperManager extends EventEmitter {
    */
   async startAll(): Promise<void> {
     logger.info('启动所有抓取器...');
-    
-    for (const [showType, scraper] of this.scrapers) {
-      await this.start(showType);
+
+    // 检查是否所有账号都相同
+    const accounts = Array.from(this.scrapers.values()).map(s => (s as any).account);
+    const allSameAccount = accounts.every(acc =>
+      acc.username === accounts[0].username && acc.password === accounts[0].password
+    );
+
+    if (allSameAccount && accounts.length > 1) {
+      logger.info('⚠️ 检测到使用相同账号，启用轮询模式避免同时登录');
+      await this.startRotation();
+    } else {
+      // 不同账号，正常启动
+      for (const [showType, scraper] of this.scrapers) {
+        await this.start(showType);
+      }
+    }
+  }
+
+  /**
+   * 启动轮询模式（用于相同账号）
+   */
+  private async startRotation(): Promise<void> {
+    logger.info('🔄 启动轮询模式...');
+
+    // 只保留队列中存在的类型
+    this.showTypeQueue = this.showTypeQueue.filter(type => this.scrapers.has(type));
+
+    if (this.showTypeQueue.length === 0) {
+      logger.warn('没有可用的抓取器');
+      return;
+    }
+
+    // 立即执行一次
+    await this.fetchRotation();
+
+    // 设置定时任务（每 5 秒轮询一次）
+    const timer = setInterval(async () => {
+      await this.fetchRotation();
+    }, 5000);
+
+    this.intervals.set('rotation' as ShowType, timer);
+  }
+
+  /**
+   * 轮询抓取
+   */
+  private async fetchRotation(): Promise<void> {
+    if (!this.sharedScraper || this.showTypeQueue.length === 0) return;
+
+    // 获取当前要抓取的类型
+    const showType = this.showTypeQueue[0];
+
+    // 轮换到下一个
+    this.showTypeQueue.push(this.showTypeQueue.shift()!);
+
+    logger.debug(`🔄 轮询抓取: ${showType}`);
+
+    try {
+      // 使用共享抓取器抓取数据
+      const matches = await this.sharedScraper.fetchMatchesByType(showType);
+
+      const cache = this.matchesCache.get(showType)!;
+      const oldMatches = new Map(cache);
+
+      // 更新缓存
+      cache.clear();
+      matches.forEach(match => {
+        cache.set(match.gid, match);
+      });
+
+      // 检测变化并发送事件
+      this.detectChanges(showType, oldMatches, cache);
+
+      // 更新状态
+      const status = this.status.get(showType)!;
+      status.lastFetchTime = Date.now();
+      status.matchCount = matches.length;
+      status.lastError = undefined;
+      status.isRunning = true;
+
+      logger.debug(`[${showType}] 抓取完成，共 ${matches.length} 场赛事`);
+    } catch (error: any) {
+      logger.error(`[${showType}] 抓取失败:`, error.message);
+      const status = this.status.get(showType)!;
+      status.errorCount++;
+      status.lastError = error.message;
     }
   }
 
