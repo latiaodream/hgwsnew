@@ -1,4 +1,6 @@
 import axios, { AxiosInstance } from 'axios';
+import * as https from 'https';
+
 import { AccountConfig, Match, ShowType, Markets } from '../types';
 import logger from '../utils/logger';
 import { parseStringPromise } from 'xml2js';
@@ -36,6 +38,7 @@ export class CrownScraper {
     this.client = axios.create({
       baseURL: this.baseUrl,
       timeout: 30000,
+      httpsAgent: new https.Agent({ rejectUnauthorized: false }),
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'User-Agent': userAgent,
@@ -151,6 +154,8 @@ export class CrownScraper {
             'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
           },
           timeout: 15000,
+          httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+          validateStatus: (s) => s >= 200 && s < 500,
         });
         const html = resp.data || '';
         const m1 = html.match(/top\.ver\s*=\s*'([^']+)'/);
