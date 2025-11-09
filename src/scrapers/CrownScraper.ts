@@ -23,9 +23,44 @@ export class CrownScraper {
       headers: {
         'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
         'Accept': '*/*',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
         'Content-Type': 'application/x-www-form-urlencoded',
+        'Origin': process.env.CROWN_API_BASE_URL || 'https://api.example.com',
+        'Referer': `${process.env.CROWN_API_BASE_URL || 'https://api.example.com'}/`,
       },
     });
+
+    // 添加响应拦截器来自动保存 Cookie
+    this.client.interceptors.response.use(
+      (response) => {
+        const setCookieHeader = response.headers['set-cookie'];
+        if (setCookieHeader && Array.isArray(setCookieHeader)) {
+          const cookieValues = setCookieHeader.map(cookie => {
+            const parts = cookie.split(';');
+            return parts[0];
+          });
+          this.cookies = cookieValues.join('; ');
+          logger.debug(`[${this.account.showType}] 保存 Cookie: ${this.cookies}`);
+        }
+        return response;
+      },
+      (error) => {
+        return Promise.reject(error);
+      }
+    );
+
+    // 添加请求拦截器来自动发送 Cookie
+    this.client.interceptors.request.use(
+      (config) => {
+        if (this.cookies) {
+          config.headers['Cookie'] = this.cookies;
+        }
+        return config;
+      },
+      (error) => {
+        return Promise.reject(error);
+      }
+    );
   }
 
   /**
@@ -33,15 +68,25 @@ export class CrownScraper {
    */
   private async getVersion(): Promise<void> {
     try {
-      const response = await this.client.get('/app/member/FT_browse/index.php?rtype=r&langx=zh-tw');
-      const versionMatch = response.data.match(/ver=(\d+)/);
-      if (versionMatch) {
-        this.version = versionMatch[1];
+      const response = await this.client.get('/');
+      const html = response.data;
+      const match = html.match(/top\.ver\s*=\s*'([^']+)'/);
+      if (match) {
+        this.version = match[1];
         logger.debug(`[${this.account.showType}] 获取版本号: ${this.version}`);
+      } else {
+        // 尝试其他匹配模式
+        const match2 = html.match(/ver=([^&"']+)/);
+        if (match2) {
+          this.version = match2[1];
+          logger.debug(`[${this.account.showType}] 获取版本号: ${this.version}`);
+        } else {
+          throw new Error('未找到版本号');
+        }
       }
     } catch (error: any) {
       logger.warn(`[${this.account.showType}] 获取版本号失败，使用默认值`);
-      this.version = '1234567890';
+      this.version = '2025-10-16-fix342_120';
     }
   }
 
@@ -49,8 +94,17 @@ export class CrownScraper {
    * 获取 BlackBox
    */
   private async getBlackBox(): Promise<string> {
-    // 简化版本，实际可能需要更复杂的逻辑
-    return Buffer.from(`${Date.now()}`).toString('base64');
+    // 生成类似真实 BlackBox 的字符串
+    const timestamp = Date.now();
+    const random1 = Math.random().toString(36).substring(2, 15);
+    const random2 = Math.random().toString(36).substring(2, 15);
+    const random3 = Math.random().toString(36).substring(2, 10);
+    const random4 = Math.random().toString(36).substring(2, 10);
+    const random5 = Math.random().toString(36).substring(2, 10);
+
+    const fakeBlackBox = `0400${random1}${random2}@${random3}@${random4};${random5}${timestamp}`;
+    logger.debug(`[${this.account.showType}] 生成 BlackBox，长度: ${fakeBlackBox.length}`);
+    return fakeBlackBox;
   }
 
   /**
