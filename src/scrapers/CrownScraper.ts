@@ -665,14 +665,28 @@ export class CrownScraper {
    * 解析赔率数据
    */
   private parseOdds(game: any): Markets | undefined {
+    // 辅助函数：从多个候选字段中选择第一个有值的
+    const pick = (keys: string[]): any => {
+      for (const key of keys) {
+        if (game[key] !== undefined && game[key] !== null && game[key] !== '') {
+          return game[key];
+        }
+      }
+      return undefined;
+    };
+
     const markets: Markets = {};
 
-    // 独赢（Moneyline）
-    if (game.RATIO_MH || game.RATIO_MN || game.RATIO_MC) {
+    // 独赢（Moneyline）- 尝试多种字段名
+    const mh = pick(['IOR_RMH', 'IOR_MH', 'RATIO_MH']);
+    const mn = pick(['IOR_RMN', 'IOR_MN', 'RATIO_MN', 'IOR_RMD']);
+    const mc = pick(['IOR_RMC', 'IOR_MC', 'RATIO_MC']);
+
+    if (mh || mn || mc) {
       markets.moneyline = {
-        home: this.parseOddsValue(game.RATIO_MH),
-        draw: this.parseOddsValue(game.RATIO_MN),
-        away: this.parseOddsValue(game.RATIO_MC),
+        home: this.parseOddsValue(mh),
+        draw: this.parseOddsValue(mn),
+        away: this.parseOddsValue(mc),
       };
     }
 
@@ -682,26 +696,34 @@ export class CrownScraper {
       overUnderLines: [],
     };
 
-    // 全场让球
-    if (game.RATIO_R || game.RATIO_RH || game.RATIO_RC) {
-      const hdp = this.parseHandicap(game.RATIO_R || game.STRONG);
+    // 全场让球 - 尝试多种字段名
+    const ratioR = pick(['RATIO_RE', 'RATIO_R', 'STRONG']);
+    const ratioRH = pick(['IOR_REH', 'IOR_RH', 'RATIO_RH']);
+    const ratioRC = pick(['IOR_REC', 'IOR_RC', 'RATIO_RC']);
+
+    if (ratioR || ratioRH || ratioRC) {
+      const hdp = this.parseHandicap(ratioR);
       if (hdp !== null && markets.full?.handicapLines) {
         markets.full.handicapLines.push({
           hdp,
-          home: this.parseOddsValue(game.RATIO_RH) || 0,
-          away: this.parseOddsValue(game.RATIO_RC) || 0,
+          home: this.parseOddsValue(ratioRH) || 0,
+          away: this.parseOddsValue(ratioRC) || 0,
         });
       }
     }
 
-    // 全场大小球
-    if (game.RATIO_O || game.RATIO_OUH || game.RATIO_OUC) {
-      const hdp = this.parseHandicap(game.RATIO_O);
+    // 全场大小球 - 尝试多种字段名
+    const ratioO = pick(['RATIO_ROUO', 'RATIO_OUO', 'RATIO_O']);
+    const ratioOUH = pick(['IOR_ROUH', 'IOR_OUH', 'RATIO_OUH']);
+    const ratioOUC = pick(['IOR_ROUC', 'IOR_OUC', 'RATIO_OUC']);
+
+    if (ratioO || ratioOUH || ratioOUC) {
+      const hdp = this.parseHandicap(ratioO);
       if (hdp !== null && markets.full?.overUnderLines) {
         markets.full.overUnderLines.push({
           hdp,
-          over: this.parseOddsValue(game.RATIO_OUH) || 0,
-          under: this.parseOddsValue(game.RATIO_OUC) || 0,
+          over: this.parseOddsValue(ratioOUC) || 0,  // 注意：大球是 C
+          under: this.parseOddsValue(ratioOUH) || 0,  // 小球是 H
         });
       }
     }
@@ -712,26 +734,34 @@ export class CrownScraper {
       overUnderLines: [],
     };
 
-    // 半场让球
-    if (game.RATIO_HR || game.RATIO_HRH || game.RATIO_HRC) {
-      const hdp = this.parseHandicap(game.RATIO_HR || game.HSTRONG);
+    // 半场让球 - 尝试多种字段名
+    const ratioHR = pick(['RATIO_HRE', 'RATIO_HR', 'HSTRONG']);
+    const ratioHRH = pick(['IOR_HREH', 'IOR_HRH', 'RATIO_HRH']);
+    const ratioHRC = pick(['IOR_HREC', 'IOR_HRC', 'RATIO_HRC']);
+
+    if (ratioHR || ratioHRH || ratioHRC) {
+      const hdp = this.parseHandicap(ratioHR);
       if (hdp !== null && markets.half?.handicapLines) {
         markets.half.handicapLines.push({
           hdp,
-          home: this.parseOddsValue(game.RATIO_HRH) || 0,
-          away: this.parseOddsValue(game.RATIO_HRC) || 0,
+          home: this.parseOddsValue(ratioHRH) || 0,
+          away: this.parseOddsValue(ratioHRC) || 0,
         });
       }
     }
 
-    // 半场大小球
-    if (game.RATIO_HO || game.RATIO_HOUH || game.RATIO_HOUC) {
-      const hdp = this.parseHandicap(game.RATIO_HO);
+    // 半场大小球 - 尝试多种字段名
+    const ratioHO = pick(['RATIO_HROUO', 'RATIO_HO']);
+    const ratioHOUH = pick(['IOR_HROUH', 'IOR_HOUH', 'RATIO_HOUH']);
+    const ratioHOUC = pick(['IOR_HROUC', 'IOR_HOUC', 'RATIO_HOUC']);
+
+    if (ratioHO || ratioHOUH || ratioHOUC) {
+      const hdp = this.parseHandicap(ratioHO);
       if (hdp !== null && markets.half?.overUnderLines) {
         markets.half.overUnderLines.push({
           hdp,
-          over: this.parseOddsValue(game.RATIO_HOUH) || 0,
-          under: this.parseOddsValue(game.RATIO_HOUC) || 0,
+          over: this.parseOddsValue(ratioHOUC) || 0,
+          under: this.parseOddsValue(ratioHOUH) || 0,
         });
       }
     }
