@@ -7,6 +7,8 @@ import { AccountConfig, Match, ShowType, Markets } from '../types';
 import logger from '../utils/logger';
 import { parseStringPromise } from 'xml2js';
 
+type RiskFlag = 'check_emnu' | 'double_login' | 'html_block';
+
 /**
  * 皇冠数据抓取器
  * 负责从皇冠网站抓取赛事数据
@@ -24,6 +26,8 @@ export class CrownScraper {
   private siteUrl: string = '';
   private siteUrlCandidates: string[] = [];
   private siteIndex: number = 0;
+  private suspendedUntil: number = 0;
+  private suspensionReason: string = '';
 
   constructor(account: AccountConfig) {
     this.account = account;
@@ -452,6 +456,10 @@ export class CrownScraper {
    * 获取赛事列表
    */
   async fetchMatches(): Promise<Match[]> {
+    if (this.shouldSkipBecauseSuspended('get_game_list')) {
+      return [];
+    }
+
     if (!this.isLoggedIn) {
       const loginSuccess = await this.login();
       if (!loginSuccess) {
@@ -495,6 +503,12 @@ export class CrownScraper {
           'Cookie': this.cookies,
         },
       });
+
+      const risk = this.detectRiskResponse(response.data);
+      if (risk) {
+        this.handleRiskyResponse(risk, `get_game_list/${this.account.showType}`);
+        return [];
+      }
 
       // 解析 XML 响应
       const data = await this.parseXmlResponse(response.data);
@@ -594,6 +608,9 @@ export class CrownScraper {
   }
 
   private async fetchMoreMarkets(match: Match): Promise<Markets | null> {
+    if (this.shouldSkipBecauseSuspended('get_game_more')) {
+      return null;
+    }
     if (!match?.gid) return null;
     if (!this.isLoggedIn) {
       const loginSuccess = await this.login();
@@ -630,12 +647,10 @@ export class CrownScraper {
         },
       });
 
-      if (typeof response.data === 'string') {
-        const trimmed = response.data.trim();
-        if (!trimmed.startsWith('<')) {
-          logger.warn(`[${this.account.showType}] get_game_more 返回非 XML: ${trimmed.slice(0, 120)}`);
-          return null;
-        }
+      const risk = this.detectRiskResponse(response.data);
+      if (risk) {
+        this.handleRiskyResponse(risk, `get_game_more/${match.showType}`);
+        return null;
       }
 
       let parsed;
@@ -1085,6 +1100,88 @@ export class CrownScraper {
 
     const num = parseFloat(str);
     return Number.isNaN(num) ? null : num;
+  }
+
+  private shouldSkipBecauseSuspended(context: string): boolean {
+    if (!this.suspendedUntil) {
+      return false;
+    }
+
+    const now = Date.now();
+    if (now >= this.suspendedUntil) {
+      this.suspendedUntil = 0;
+      this.suspensionReason = '';
+      return false;
+    }
+
+    const secondsLeft = Math.ceil((this.suspendedUntil - now) / 1000);
+    logger.warn(
+      `[${this.account.showType}] 账号冷却中 (${this.suspensionReason || '未知原因'})，剩余 ${secondsLeft}s，跳过 ${context}`
+    );
+    return true;
+  }
+
+  private suspendAccount(durationMs: number, reason: string): void {
+    this.suspendedUntil = Date.now() + durationMs;
+    this.suspensionReason = reason;
+    this.isLoggedIn = false;
+    logger.warn(
+      `[${this.account.showType}] 账号进入冷却：${reason}，暂停 ${Math.ceil(durationMs / 60000)} 分钟`
+    );
+  }
+
+  private detectRiskResponse(raw: any): RiskFlag | null {
+    if (!raw) return null;
+    let text: string | null = null;
+
+    if (typeof raw === 'string') {
+      text = raw.trim();
+    } else if (Buffer.isBuffer(raw)) {
+      text = raw.toString('utf8').trim();
+    } else if (typeof raw === 'object' && raw.data && typeof raw.data === 'string') {
+      text = raw.data.trim();
+    }
+
+    if (!text) return null;
+
+    if (/CheckEMNU/i.test(text)) {
+      return 'check_emnu';
+    }
+
+    if (/double\s*login/i.test(text)) {
+      return 'double_login';
+    }
+
+    if (!text.startsWith('<')) {
+      return 'html_block';
+    }
+
+    return null;
+  }
+
+  private handleRiskyResponse(flag: RiskFlag, context: string): void {
+    let duration = 10 * 60 * 1000;
+    let reason = '未知风险';
+
+    switch (flag) {
+      case 'check_emnu':
+        duration = 15 * 60 * 1000;
+        reason = '检测到 CheckEMNU 安全校验';
+        break;
+      case 'double_login':
+        duration = 10 * 60 * 1000;
+        reason = '疑似重复登录';
+        break;
+      case 'html_block':
+        duration = 5 * 60 * 1000;
+        reason = '返回非预期页面';
+        break;
+    }
+
+    logger.warn(
+      `[${this.account.showType}] ${reason} (${context})，暂停抓取 ${Math.ceil(duration / 60000)} 分钟`
+    );
+    this.suspendAccount(duration, `${reason} @ ${context}`);
   }
 
   /**
