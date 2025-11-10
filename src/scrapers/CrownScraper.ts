@@ -274,8 +274,8 @@ export class CrownScraper {
     const warmPaths = [
       '/',
       '/app/member/',
-      '/app/member/mem_login.php?langx=zh-tw',
-      '/app/member/index.php?langx=zh-tw'
+      '/app/member/mem_login.php?langx=zh-cn',
+      '/app/member/index.php?langx=zh-cn'
     ];
     for (const p of warmPaths) {
       try {
@@ -316,7 +316,7 @@ export class CrownScraper {
         // 构建请求参数
         const params = new URLSearchParams({
           p: 'chk_login',
-          langx: 'zh-tw',  // 使用繁体中文版本
+          langx: 'zh-cn',  // 使用简体中文版本
           ver: this.version,
           username: this.account.username,
           password: this.account.password,
@@ -410,7 +410,7 @@ export class CrownScraper {
           p: 'logout',
           uid: uid,
           ver: this.version,
-          langx: 'zh-tw',
+          langx: 'zh-cn',
         });
 
         await this.postTransform(params.toString());
@@ -469,7 +469,7 @@ export class CrownScraper {
       const params = new URLSearchParams({
         uid: this.uid,
         ver: this.version,
-        langx: 'zh-tw',
+        langx: 'zh-cn',
         p: 'get_game_list',
         p3type: '',
         date: '',
@@ -547,7 +547,7 @@ export class CrownScraper {
         p: 'FT_order_view',
         uid: this.uid,
         ver: this.version,
-        langx: 'zh-tw',
+        langx: 'zh-cn',
         odd_f_type: 'H',
         gid: gid,
         gtype: 'FT',
