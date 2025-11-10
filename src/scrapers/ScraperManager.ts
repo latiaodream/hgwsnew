@@ -15,6 +15,12 @@ export class ScraperManager extends EventEmitter {
   private sharedScraper: CrownScraper | null = null; // 共享的抓取器
   private currentShowType: ShowType = 'live'; // 当前抓取的类型
   private showTypeQueue: ShowType[] = ['live', 'today', 'early']; // 轮询队列
+  private accountPools: Map<ShowType, AccountConfig[]> = new Map();
+  private activeAccountIndex: Map<ShowType, number> = new Map();
+  private rotationTimers: Map<ShowType, NodeJS.Timeout> = new Map();
+  private rotating: Set<ShowType> = new Set();
+  private readonly rotationIntervalMinutes = parseInt(process.env.ACCOUNT_ROTATION_MINUTES || '60', 10);
+  private readonly rotationRestMinutes = parseInt(process.env.ACCOUNT_ROTATION_REST_MINUTES || '10', 10);
 
   constructor() {
     super();
@@ -41,15 +47,23 @@ export class ScraperManager extends EventEmitter {
    * 添加抓取器
    */
   addScraper(account: AccountConfig): void {
-    // 检查是否所有账号都相同
+    const pool = this.accountPools.get(account.showType) || [];
+    pool.push(account);
+    this.accountPools.set(account.showType, pool);
+
     if (!this.sharedScraper) {
       this.sharedScraper = new CrownScraper(account);
       logger.info(`创建共享抓取器 (账号: ${account.username})`);
     }
 
-    const scraper = new CrownScraper(account);
-    this.scrapers.set(account.showType, scraper);
-    logger.info(`添加抓取器: ${account.showType} (账号: ${account.username})`);
+    if (!this.scrapers.has(account.showType)) {
+      const scraper = new CrownScraper(account);
+      this.scrapers.set(account.showType, scraper);
+      this.activeAccountIndex.set(account.showType, 0);
+      logger.info(`添加抓取器: ${account.showType} (账号: ${account.username})`);
+    } else {
+      logger.info(`加入账号池: ${account.showType} (账号: ${account.username})，当前池大小: ${pool.length}`);
+    }
   }
 
   /**
@@ -90,6 +104,7 @@ export class ScraperManager extends EventEmitter {
       for (const [showType, scraper] of this.scrapers) {
         await this.start(showType);
       }
+      this.setupAccountRotationSchedules();
     }
   }
 
@@ -285,6 +300,13 @@ export class ScraperManager extends EventEmitter {
       this.intervals.delete('rotation' as ShowType);
     }
 
+    // 停止账号轮换定时器
+    for (const timer of this.rotationTimers.values()) {
+      clearInterval(timer);
+    }
+    this.rotationTimers.clear();
+    this.rotating.clear();
+
     // 登出所有账号
     logger.info('登出所有账号...');
     const logoutPromises: Promise<void>[] = [];
@@ -419,6 +441,85 @@ export class ScraperManager extends EventEmitter {
     }
   }
 
+  private setupAccountRotationSchedules(): void {
+    if (!Number.isFinite(this.rotationIntervalMinutes) || this.rotationIntervalMinutes <= 0) {
+      return;
+    }
+
+    for (const [showType, pool] of this.accountPools.entries()) {
+      if (pool.length <= 1) continue;
+      if (this.rotationTimers.has(showType)) continue;
+
+      const intervalMs = this.rotationIntervalMinutes * 60 * 1000;
+      const timer = setInterval(() => {
+        this.rotateAccountForShowType(showType);
+      }, intervalMs);
+
+      this.rotationTimers.set(showType, timer);
+      logger.info(
+        `[${showType}] 启动账号轮换：池大小 ${pool.length}，每 ${this.rotationIntervalMinutes} 分钟切换一次`
+      );
+    }
+  }
+
+  private async rotateAccountForShowType(showType: ShowType): Promise<void> {
+    if (this.rotating.has(showType)) {
+      return;
+    }
+
+    const pool = this.accountPools.get(showType);
+    if (!pool || pool.length <= 1) {
+      return;
+    }
+
+    this.rotating.add(showType);
+
+    try {
+      const nextIndex = this.getNextAccountIndex(showType);
+      if (nextIndex === null) return;
+
+      logger.info(`[${showType}] 正在轮换账号，目标: ${pool[nextIndex].username}`);
+
+      const oldScraper = this.scrapers.get(showType);
+      this.stop(showType);
+
+      if (oldScraper) {
+        try {
+          await oldScraper.logout();
+        } catch (error: any) {
+          logger.warn(`[${showType}] 账号登出失败: ${error?.message || error}`);
+        }
+      }
+
+      const restMs = Math.max(0, this.rotationRestMinutes) * 60 * 1000;
+      if (restMs > 0) {
+        logger.info(`[${showType}] 进入冷却 ${this.rotationRestMinutes} 分钟后切换账号`);
+        await new Promise(resolve => setTimeout(resolve, restMs));
+      }
+
+      const nextAccount = pool[nextIndex];
+      const newScraper = new CrownScraper(nextAccount);
+      this.scrapers.set(showType, newScraper);
+      this.activeAccountIndex.set(showType, nextIndex);
+
+      await this.start(showType);
+      logger.info(`[${showType}] 账号切换完成 -> ${nextAccount.username}`);
+    } catch (error: any) {
+      logger.error(`[${showType}] 账号轮换失败: ${error?.message || error}`);
+    } finally {
+      this.rotating.delete(showType);
+    }
+  }
+
+  private getNextAccountIndex(showType: ShowType): number | null {
+    const pool = this.accountPools.get(showType);
+    if (!pool || pool.length === 0) return null;
+
+    const currentIndex = this.activeAccountIndex.get(showType) ?? 0;
+    const nextIndex = (currentIndex + 1) % pool.length;
+    return nextIndex;
+  }
+
   /**
    * 获取所有赛事
    */
@@ -463,4 +564,3 @@ export class ScraperManager extends EventEmitter {
     return this.status.get(showType);
   }
 }
-

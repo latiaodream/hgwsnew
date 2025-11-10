@@ -72,19 +72,26 @@ WS_AUTH_TOKEN=your-secret-token-here
 # 滚球账号配置
 LIVE_CROWN_USERNAME=live_account
 LIVE_CROWN_PASSWORD=live_password
+LIVE_ACCOUNT_POOL=hg339352/2OLqr44s,hg387962/xGeZj3fx,hg841992/YW07Z7lu
 
 # 今日账号配置
 TODAY_CROWN_USERNAME=today_account
 TODAY_CROWN_PASSWORD=today_password
+TODAY_ACCOUNT_POOL=
 
 # 早盘账号配置
 EARLY_CROWN_USERNAME=early_account
 EARLY_CROWN_PASSWORD=early_password
+EARLY_ACCOUNT_POOL=
 
 # 抓取间隔（秒）
 LIVE_FETCH_INTERVAL=2
 TODAY_FETCH_INTERVAL=10
 EARLY_FETCH_INTERVAL=30
+
+# 账号轮换（分钟）
+ACCOUNT_ROTATION_MINUTES=60
+ACCOUNT_ROTATION_REST_MINUTES=10
 
 # 皇冠 API 配置
 CROWN_API_BASE_URL=https://api.example.com
@@ -357,10 +364,11 @@ tail -f logs/error.log
 ## 注意事项
 
 1. **账号安全**：建议使用专门的抓取账号，不要使用下注账号
-2. **抓取频率**：根据实际需求调整抓取间隔，避免过于频繁
-3. **错误处理**：如果某个账号被封，只影响对应类型的数据，其他类型不受影响
-4. **网络稳定**：确保服务器网络稳定，建议使用固定 IP
-5. **日志管理**：定期清理日志文件，避免占用过多磁盘空间
+2. **账号轮换**：使用 `LIVE_ACCOUNT_POOL` 等变量可以配置多个账号，程序会按照 `ACCOUNT_ROTATION_MINUTES` 自动切换，并在 `ACCOUNT_ROTATION_REST_MINUTES` 内暂停抓取以降低封号风险
+3. **抓取频率**：根据实际需求调整抓取间隔，避免过于频繁
+4. **错误处理**：如果某个账号被封，只影响对应类型的数据，其他类型不受影响
+5. **网络稳定**：确保服务器网络稳定，建议使用固定 IP
+6. **日志管理**：定期清理日志文件，避免占用过多磁盘空间
 
 ## 故障排查
 

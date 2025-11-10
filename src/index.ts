@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 import { ScraperManager } from './scrapers/ScraperManager';
 import { WSServer } from './websocket/WSServer';
-import { AccountConfig } from './types';
+import { AccountConfig, ShowType } from './types';
 import logger from './utils/logger';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -73,37 +73,72 @@ class Application {
   private loadAccounts(): AccountConfig[] {
     const accounts: AccountConfig[] = [];
 
-    // 滚球账号
-    if (process.env.LIVE_CROWN_USERNAME && process.env.LIVE_CROWN_PASSWORD) {
-      accounts.push({
-        username: process.env.LIVE_CROWN_USERNAME,
-        password: process.env.LIVE_CROWN_PASSWORD,
-        showType: 'live',
-      });
-      logger.info(`✅ 加载滚球账号: ${process.env.LIVE_CROWN_USERNAME}`);
-    }
+    this.appendSingleAccount(
+      accounts,
+      'live',
+      process.env.LIVE_CROWN_USERNAME,
+      process.env.LIVE_CROWN_PASSWORD,
+      '滚球账号'
+    );
+    this.appendSingleAccount(
+      accounts,
+      'today',
+      process.env.TODAY_CROWN_USERNAME,
+      process.env.TODAY_CROWN_PASSWORD,
+      '今日账号'
+    );
+    this.appendSingleAccount(
+      accounts,
+      'early',
+      process.env.EARLY_CROWN_USERNAME,
+      process.env.EARLY_CROWN_PASSWORD,
+      '早盘账号'
+    );
 
-    // 今日账号
-    if (process.env.TODAY_CROWN_USERNAME && process.env.TODAY_CROWN_PASSWORD) {
-      accounts.push({
-        username: process.env.TODAY_CROWN_USERNAME,
-        password: process.env.TODAY_CROWN_PASSWORD,
-        showType: 'today',
-      });
-      logger.info(`✅ 加载今日账号: ${process.env.TODAY_CROWN_USERNAME}`);
-    }
-
-    // 早盘账号
-    if (process.env.EARLY_CROWN_USERNAME && process.env.EARLY_CROWN_PASSWORD) {
-      accounts.push({
-        username: process.env.EARLY_CROWN_USERNAME,
-        password: process.env.EARLY_CROWN_PASSWORD,
-        showType: 'early',
-      });
-      logger.info(`✅ 加载早盘账号: ${process.env.EARLY_CROWN_USERNAME}`);
-    }
+    this.appendAccountPool(accounts, 'live', process.env.LIVE_ACCOUNT_POOL, '滚球账号池');
+    this.appendAccountPool(accounts, 'today', process.env.TODAY_ACCOUNT_POOL, '今日账号池');
+    this.appendAccountPool(accounts, 'early', process.env.EARLY_ACCOUNT_POOL, '早盘账号池');
 
     return accounts;
+  }
+
+  private appendSingleAccount(
+    accounts: AccountConfig[],
+    showType: ShowType,
+    username?: string,
+    password?: string,
+    label?: string
+  ): void {
+    if (!username || !password) return;
+    accounts.push({ username, password, showType });
+    logger.info(`✅ 加载${label || showType}：${username}`);
+  }
+
+  private appendAccountPool(
+    accounts: AccountConfig[],
+    showType: ShowType,
+    raw?: string,
+    label?: string
+  ): void {
+    if (!raw) return;
+    const entries = raw
+      .split(/[\r\n,]+/)
+      .map(item => item.trim())
+      .filter(Boolean);
+
+    entries.forEach((entry, idx) => {
+      const [username, password] = entry.includes('/') ? entry.split('/') : entry.split(':');
+      if (!username || !password) {
+        logger.warn(`⚠️ ${label || showType} 中的账号格式无效: ${entry}`);
+        return;
+      }
+      accounts.push({
+        username: username.trim(),
+        password: password.trim(),
+        showType,
+      });
+      logger.info(`✅ 加载${label || showType} #${idx + 1}: ${username.trim()}`);
+    });
   }
 
   /**
@@ -264,4 +299,3 @@ process.on('unhandledRejection', (reason, promise) => {
   logger.error('未处理的 Promise 拒绝:', reason);
   app.shutdown();
 });
-
