@@ -44,103 +44,97 @@
         </div>
     </div>
 
-    <div id="auth-panel" style="background: white; padding: 20px; border-radius: 4px; margin-bottom: 10px; display: none;">
-        <div style="display: flex; gap: 10px; align-items: center;">
-            <input type="password" id="token-input" placeholder="请输入访问密钥" style="flex: 1; padding: 8px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 13px;">
-            <button id="auth-btn" style="padding: 8px 20px; background: #1890ff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px;">连接</button>
-        </div>
-        <div id="auth-error" style="color: #ff4d4f; font-size: 12px; margin-top: 8px; display: none;"></div>
-    </div>
-
     <div id="matches-container"></div>
     <script>
-        let ws = null, currentType = 'live', matchesData = { live: [], today: [], early: [] };
-        let userToken = localStorage.getItem('crown_token') || '';
+        let ws = null, reconnectTimer = null, currentType = 'live';
+        const matchesData = { live: [], today: [], early: [] };
+        const SUBSCRIBE_TYPES = ['live', 'today', 'early'];
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const WS_URL = `${protocol}//${window.location.host}/ws`;
+        const AUTH_TOKEN = 'atiaolatiaozhurenzhuren';
         let isAuthenticated = false;
 
         function init() {
-            setupAuth();
             setupTabs();
-            if (userToken) {
-                connectWebSocket();
-            } else {
-                showAuthPanel();
-            }
-        }
-
-        function setupAuth() {
-            const authBtn = document.getElementById('auth-btn');
-            const tokenInput = document.getElementById('token-input');
-
-            authBtn.addEventListener('click', () => {
-                const token = tokenInput.value.trim();
-                if (!token) {
-                    showAuthError('请输入访问密钥');
-                    return;
-                }
-                userToken = token;
-                localStorage.setItem('crown_token', token);
-                hideAuthPanel();
-                connectWebSocket();
-            });
-
-            tokenInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') authBtn.click();
-            });
-        }
-
-        function showAuthPanel() {
-            document.getElementById('auth-panel').style.display = 'block';
-        }
-
-        function hideAuthPanel() {
-            document.getElementById('auth-panel').style.display = 'none';
-            document.getElementById('auth-error').style.display = 'none';
-        }
-
-        function showAuthError(msg) {
-            const errorEl = document.getElementById('auth-error');
-            errorEl.textContent = msg;
-            errorEl.style.display = 'block';
+            connectWebSocket();
         }
 
         function connectWebSocket() {
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            ws = new WebSocket(`${protocol}//${window.location.host}`);
+            clearTimeout(reconnectTimer);
+            isAuthenticated = false;
+
+            ws = new WebSocket(WS_URL);
+
             ws.onopen = () => {
                 console.log('WebSocket连接成功');
-                ws.send(JSON.stringify({ type: 'auth', data: { token: userToken } }));
+                sendAuth();
             };
-            ws.onmessage = (event) => { try { handleMessage(JSON.parse(event.data)); } catch (error) { console.error('解析消息失败:', error); } };
+
+            ws.onmessage = (event) => {
+                try {
+                    handleMessage(JSON.parse(event.data));
+                } catch (error) {
+                    console.error('解析消息失败:', error);
+                }
+            };
+
             ws.onerror = (error) => {
                 console.error('WebSocket错误:', error);
-                showAuthError('连接失败，请检查网络或密钥是否正确');
-                showAuthPanel();
             };
+
             ws.onclose = () => {
                 console.log('WebSocket连接关闭，3秒后重连...');
-                if (isAuthenticated) {
-                    setTimeout(connectWebSocket, 3000);
-                }
+                reconnectTimer = setTimeout(connectWebSocket, 3000);
             };
         }
 
+        function sendAuth() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+            ws.send(JSON.stringify({ type: 'auth', data: { token: AUTH_TOKEN } }));
+        }
+
         function handleMessage(message) {
-            if (message.type === 'auth_success') {
-                isAuthenticated = true;
-                hideAuthPanel();
-                console.log('认证成功');
-            } else if (message.type === 'auth_failed') {
-                isAuthenticated = false;
-                showAuthError('密钥错误，请重新输入');
-                showAuthPanel();
-                if (ws) ws.close();
-            } else if (message.type === 'full_data') {
-                const showType = message.data.showType;
-                matchesData[showType] = message.data.matches || [];
-                updateCount(showType, matchesData[showType].length);
-                if (showType === currentType) renderMatches();
+            switch (message.type) {
+                case 'heartbeat':
+                    handleHeartbeat(message.data);
+                    break;
+                case 'error':
+                    handleServerError(message.data);
+                    break;
+                case 'full_data':
+                    handleFullData(message.data);
+                    break;
+                default:
+                    break;
             }
+        }
+
+        function handleHeartbeat(data = {}) {
+            if (data.message === '认证成功' && !isAuthenticated) {
+                isAuthenticated = true;
+                subscribeAll();
+            }
+        }
+
+        function handleServerError(data = {}) {
+            const errorMsg = (data?.error || '').toString();
+            console.warn('服务器错误:', errorMsg);
+        }
+
+        function handleFullData(payload = {}) {
+            const showType = payload.showType;
+            if (!showType) return;
+            matchesData[showType] = payload.matches || [];
+            updateCount(showType, matchesData[showType].length);
+            if (showType === currentType) renderMatches();
+        }
+
+        function subscribeAll() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+            ws.send(JSON.stringify({
+                type: 'subscribe',
+                data: { showTypes: SUBSCRIBE_TYPES }
+            }));
         }
 
         function updateCount(type, count) { const countEl = document.getElementById(`${type}-count`); if (countEl) countEl.textContent = count; }
