@@ -612,7 +612,9 @@ export class CrownScraper {
         },
       });
 
-      const markets = this.parseMoreMarkets(response.data);
+      const parsed = await this.parseXmlResponse(response.data);
+      const serverResponse = parsed?.serverresponse || parsed;
+      const markets = this.parseMoreMarkets(serverResponse);
       return markets;
     } catch (error: any) {
       logger.warn(`[${this.account.showType}] 获取更多盘口失败 (GID: ${match.gid}): ${error.message}`);
@@ -919,7 +921,16 @@ export class CrownScraper {
    */
   private parseMoreMarkets(data: any): Markets | null {
     try {
-      const games = Array.isArray(data.game) ? data.game : [data.game];
+      if (!data) {
+        return null;
+      }
+
+      const gameContainer = data.game || data.GAME || data?.serverresponse?.game;
+      if (!gameContainer) {
+        return null;
+      }
+
+      const games = Array.isArray(gameContainer) ? gameContainer : [gameContainer];
 
       const markets: Markets = {
         full: { handicapLines: [], overUnderLines: [] },
