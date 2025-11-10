@@ -167,6 +167,20 @@ class Application {
           res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
           res.end(data);
         });
+      } else if (req.url === '/matches-v2' || req.url === '/matches-v2.html') {
+        // 处理 /matches-v2 路径
+        const filePath = path.join(process.cwd(), 'public', 'matches-v2.html');
+
+        fs.readFile(filePath, (err, data) => {
+          if (err) {
+            res.writeHead(404, { 'Content-Type': 'text/plain' });
+            res.end('404 Not Found');
+            return;
+          }
+
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end(data);
+        });
       } else {
         res.writeHead(404, { 'Content-Type': 'text/plain' });
         res.end('404 Not Found');
