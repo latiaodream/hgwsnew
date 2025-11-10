@@ -513,7 +513,12 @@ export class CrownScraper {
       }
 
       const matches = this.parseMatches(data);
-      logger.info(`[${this.account.showType}] 抓取到 ${matches.length} 场赛事`);
+
+      // 为每场赛事获取更多盘口（限制前10场，避免请求过多）
+      const matchesToEnrich = matches.slice(0, 10);
+      await this.enrichMatchesWithMoreMarkets(matchesToEnrich);
+
+      logger.info(`[${this.account.showType}] 抓取到 ${matches.length} 场赛事，已获取 ${matchesToEnrich.length} 场的多盘口数据`);
 
       return matches;
     } catch (error: any) {
@@ -525,6 +530,91 @@ export class CrownScraper {
       }
 
       throw error;
+    }
+  }
+
+  /**
+   * 为赛事获取更多盘口数据
+   */
+  private async enrichMatchesWithMoreMarkets(matches: Match[]): Promise<void> {
+    for (const match of matches) {
+      try {
+        const moreMarkets = await this.fetchMoreMarkets(match.gid);
+        if (moreMarkets) {
+          // 合并多盘口数据
+          if (moreMarkets.full) {
+            if (moreMarkets.full.handicapLines && moreMarkets.full.handicapLines.length > 0) {
+              match.markets = match.markets || {};
+              match.markets.full = match.markets.full || { handicapLines: [], overUnderLines: [] };
+              match.markets.full.handicapLines = moreMarkets.full.handicapLines;
+            }
+            if (moreMarkets.full.overUnderLines && moreMarkets.full.overUnderLines.length > 0) {
+              match.markets = match.markets || {};
+              match.markets.full = match.markets.full || { handicapLines: [], overUnderLines: [] };
+              match.markets.full.overUnderLines = moreMarkets.full.overUnderLines;
+            }
+          }
+          if (moreMarkets.half) {
+            if (moreMarkets.half.handicapLines && moreMarkets.half.handicapLines.length > 0) {
+              match.markets = match.markets || {};
+              match.markets.half = match.markets.half || { handicapLines: [], overUnderLines: [] };
+              match.markets.half.handicapLines = moreMarkets.half.handicapLines;
+            }
+            if (moreMarkets.half.overUnderLines && moreMarkets.half.overUnderLines.length > 0) {
+              match.markets = match.markets || {};
+              match.markets.half = match.markets.half || { handicapLines: [], overUnderLines: [] };
+              match.markets.half.overUnderLines = moreMarkets.half.overUnderLines;
+            }
+          }
+        }
+      } catch (error: any) {
+        logger.warn(`[${this.account.showType}] 获取赛事 ${match.gid} 的多盘口失败: ${error.message}`);
+      }
+    }
+  }
+
+  /**
+   * 获取更多盘口数据
+   */
+  private async fetchMoreMarkets(gid: string): Promise<Markets | null> {
+    try {
+      const timestamp = Date.now().toString();
+      const showTypeParam = this.getShowTypeParam();
+
+      const params = new URLSearchParams({
+        uid: this.uid,
+        ver: this.version,
+        langx: 'zh-cn',
+        p: 'get_game_more',
+        gtype: 'ft',
+        showtype: showTypeParam.showtype,
+        ltype: '3',
+        isRB: this.account.showType === 'live' ? 'Y' : 'N',
+        ecid: gid,
+        specialClick: '',
+        mode: 'NORMAL',
+        from: 'game_more',
+        filter: 'All',
+        ts: timestamp,
+      });
+
+      const response = await this.postTransform(params.toString(), {
+        headers: {
+          'Cookie': this.cookies,
+        },
+      });
+
+      const data = await this.parseXmlResponse(response.data);
+
+      if (!data || !data.game) {
+        return null;
+      }
+
+      // 解析多盘口数据
+      return this.parseMoreMarkets(data);
+    } catch (error: any) {
+      logger.debug(`[${this.account.showType}] 获取更多盘口失败: ${error.message}`);
+      return null;
     }
   }
 
@@ -813,6 +903,91 @@ export class CrownScraper {
     }
 
     return markets;
+  }
+
+  /**
+   * 解析更多盘口数据
+   */
+  private parseMoreMarkets(data: any): Markets | null {
+    try {
+      const games = Array.isArray(data.game) ? data.game : [data.game];
+
+      const markets: Markets = {
+        full: { handicapLines: [], overUnderLines: [] },
+        half: { handicapLines: [], overUnderLines: [] },
+      };
+
+      for (const game of games) {
+        // 全场让球盘口
+        const ratioR = game.ratio || game.RATIO || game.RATIO_RE;
+        const iorRH = game.ior_RH || game.IOR_RH;
+        const iorRC = game.ior_RC || game.IOR_RC;
+
+        if (ratioR && (iorRH || iorRC)) {
+          const hdp = this.parseHandicap(ratioR);
+          if (hdp !== null) {
+            markets.full!.handicapLines!.push({
+              hdp,
+              home: this.parseOddsValue(iorRH) || 0,
+              away: this.parseOddsValue(iorRC) || 0,
+            });
+          }
+        }
+
+        // 全场大小球盘口
+        const ratioO = game.ratio_o || game.ratio_u || game.RATIO_O || game.RATIO_U;
+        const iorOUH = game.ior_OUH || game.IOR_OUH;
+        const iorOUC = game.ior_OUC || game.IOR_OUC;
+
+        if (ratioO && (iorOUH || iorOUC)) {
+          const hdp = this.parseHandicap(ratioO);
+          if (hdp !== null) {
+            markets.full!.overUnderLines!.push({
+              hdp,
+              over: this.parseOddsValue(iorOUC) || 0,
+              under: this.parseOddsValue(iorOUH) || 0,
+            });
+          }
+        }
+
+        // 半场让球盘口
+        const ratioHR = game.hratio || game.HRATIO || game.RATIO_HR;
+        const iorHRH = game.ior_HRH || game.IOR_HRH;
+        const iorHRC = game.ior_HRC || game.IOR_HRC;
+
+        if (ratioHR && (iorHRH || iorHRC)) {
+          const hdp = this.parseHandicap(ratioHR);
+          if (hdp !== null) {
+            markets.half!.handicapLines!.push({
+              hdp,
+              home: this.parseOddsValue(iorHRH) || 0,
+              away: this.parseOddsValue(iorHRC) || 0,
+            });
+          }
+        }
+
+        // 半场大小球盘口
+        const ratioHO = game.ratio_ho || game.ratio_hu || game.RATIO_HO || game.RATIO_HU;
+        const iorHOUH = game.ior_HOUH || game.IOR_HOUH;
+        const iorHOUC = game.ior_HOUC || game.IOR_HOUC;
+
+        if (ratioHO && (iorHOUH || iorHOUC)) {
+          const hdp = this.parseHandicap(ratioHO);
+          if (hdp !== null) {
+            markets.half!.overUnderLines!.push({
+              hdp,
+              over: this.parseOddsValue(iorHOUC) || 0,
+              under: this.parseOddsValue(iorHOUH) || 0,
+            });
+          }
+        }
+      }
+
+      return markets;
+    } catch (error: any) {
+      logger.warn(`解析更多盘口数据失败: ${error.message}`);
+      return null;
+    }
   }
 
   /**
