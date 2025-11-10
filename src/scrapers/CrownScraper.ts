@@ -514,6 +514,8 @@ export class CrownScraper {
 
       const matches = this.parseMatches(data);
 
+      await this.enrichMatchesWithMoreMarkets(matches);
+
       logger.info(`[${this.account.showType}] 抓取到 ${matches.length} 场赛事`);
 
       return matches;
@@ -526,6 +528,95 @@ export class CrownScraper {
       }
 
       throw error;
+    }
+  }
+
+  private async enrichMatchesWithMoreMarkets(matches: Match[]): Promise<void> {
+    if (!Array.isArray(matches) || matches.length === 0) return;
+
+    const maxCount = this.account.showType === 'live' ? 30 : 15;
+    const targets = matches.slice(0, maxCount);
+
+    for (const match of targets) {
+      const moreMarkets = await this.fetchMoreMarkets(match);
+      if (moreMarkets) {
+        match.markets = this.mergeMarkets(match.markets || {}, moreMarkets);
+      }
+      await new Promise(resolve => setTimeout(resolve, 120));
+    }
+  }
+
+  private mergeMarkets(base: Markets, incoming: Markets): Markets {
+    const merged: Markets = {
+      moneyline: base.moneyline ? { ...base.moneyline } : undefined,
+      full: base.full ? { ...base.full } : {},
+      half: base.half ? { ...base.half } : {},
+    };
+
+    if (incoming.moneyline) {
+      merged.moneyline = { ...(merged.moneyline || {}), ...incoming.moneyline };
+    }
+
+    const mergeLineArray = <T>(target?: T[], addition?: T[]): T[] | undefined => {
+      if ((!target || target.length === 0) && (!addition || addition.length === 0)) {
+        return target;
+      }
+      return [...(target || []), ...(addition || [])];
+    };
+
+    if (incoming.full) {
+      merged.full = merged.full || {};
+      merged.full.handicapLines = mergeLineArray(merged.full.handicapLines, incoming.full.handicapLines);
+      merged.full.overUnderLines = mergeLineArray(merged.full.overUnderLines, incoming.full.overUnderLines);
+    }
+
+    if (incoming.half) {
+      merged.half = merged.half || {};
+      merged.half.handicapLines = mergeLineArray(merged.half.handicapLines, incoming.half.handicapLines);
+      merged.half.overUnderLines = mergeLineArray(merged.half.overUnderLines, incoming.half.overUnderLines);
+    }
+
+    return merged;
+  }
+
+  private async fetchMoreMarkets(match: Match): Promise<Markets | null> {
+    if (!match?.gid) return null;
+    if (!this.isLoggedIn) {
+      const loginSuccess = await this.login();
+      if (!loginSuccess) {
+        return null;
+      }
+    }
+
+    try {
+      const params = new URLSearchParams({
+        p: 'get_game_more',
+        uid: this.uid,
+        ver: this.version,
+        langx: 'zh-cn',
+        gtype: 'FT',
+        showtype: match.showType === 'live' ? 'live' : (match.showType === 'today' ? 'today' : 'early'),
+        ltype: '3',
+        isRB: match.showType === 'live' ? 'Y' : 'N',
+        gid: match.gid,
+        filter: 'All',
+      });
+
+      if (match.lid) {
+        params.set('lid', match.lid);
+      }
+
+      const response = await this.postTransform(params.toString(), {
+        headers: {
+          'Cookie': this.cookies,
+        },
+      });
+
+      const markets = this.parseMoreMarkets(response.data);
+      return markets;
+    } catch (error: any) {
+      logger.warn(`[${this.account.showType}] 获取更多盘口失败 (GID: ${match.gid}): ${error.message}`);
+      return null;
     }
   }
 
@@ -620,6 +711,7 @@ export class CrownScraper {
         try {
           const match: Match = {
             gid: game.GID || game.gid,
+            lid: league.LID || league.lid || game.LID || game.lid,
             home: game.TEAM_H || game.team_h || '',
             home_zh: game.TEAM_H || game.team_h || '',
             away: game.TEAM_C || game.team_c || '',
@@ -631,6 +723,10 @@ export class CrownScraper {
             home_score: this.parseScore(game.SCORE_H || game.score_h),
             away_score: this.parseScore(game.SCORE_C || game.score_c),
             showType: this.account.showType,
+            raw: {
+              league,
+              game,
+            },
             markets: this.parseOdds(game),
           };
 
@@ -963,4 +1059,3 @@ export class CrownScraper {
   }
 
 }
-

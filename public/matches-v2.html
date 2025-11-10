@@ -242,6 +242,28 @@
         let ws = null;
         let matches = { live: [], today: [], early: [] };
         let currentType = 'live';
+
+        const formatOdds = (value) => {
+            if (value === undefined || value === null) return '-';
+            const num = Number(value);
+            if (!Number.isFinite(num) || num <= 0) return '-';
+            return num.toFixed(2);
+        };
+
+        const formatHandicapValue = (value, fallback = '0') => {
+            if (value === undefined || value === null || value === '') return fallback;
+            const num = Number(value);
+            if (!Number.isFinite(num)) return String(value);
+            if (Number.isInteger(num)) return num.toString();
+            return num.toFixed(2).replace(/\.00$/, '');
+        };
+
+        const formatMatchTime = (time) => {
+            if (!time) return '';
+            const date = new Date(time);
+            if (Number.isNaN(date.getTime())) return time;
+            return date.toLocaleString('zh-CN', { hour12: false });
+        };
         
         // 连接 WebSocket
         function connect() {
@@ -312,22 +334,26 @@
         function renderMatch(match) {
             const markets = match.markets || {};
 
+            const leagueName = match.league || '';
+            const homeName = match.home || '';
+            const awayName = match.away || '';
+
             return `
                 <div class="match-card">
                     <div class="match-main">
                         <div class="match-info">
-                            <div class="league">${match.league || match.league_zh || ''}</div>
+                            <div class="league">${leagueName}</div>
                             <div class="teams">
                                 <div class="team">
-                                    <span class="team-name">${match.home || match.home_zh || ''}</span>
+                                    <span class="team-name">${homeName}</span>
                                     ${match.home_score !== undefined ? `<span class="score">${match.home_score}</span>` : ''}
                                 </div>
                                 <div class="team">
-                                    <span class="team-name">${match.away || match.away_zh || ''}</span>
+                                    <span class="team-name">${awayName}</span>
                                     ${match.away_score !== undefined ? `<span class="score">${match.away_score}</span>` : ''}
                                 </div>
                             </div>
-                            <div class="match-time">${match.match_time || ''}</div>
+                            <div class="match-time">${formatMatchTime(match.match_time)}</div>
                         </div>
 
                         <div class="markets">
@@ -352,15 +378,15 @@
                     <div class="market-grid three-col">
                         <div class="odds-btn">
                             <span class="odds-label">主胜</span>
-                            <span class="odds-value">${ml.home || '-'}</span>
+                            <span class="odds-value">${formatOdds(ml.home)}</span>
                         </div>
                         <div class="odds-btn">
                             <span class="odds-label">平局</span>
-                            <span class="odds-value">${ml.draw || '-'}</span>
+                            <span class="odds-value">${formatOdds(ml.draw)}</span>
                         </div>
                         <div class="odds-btn">
                             <span class="odds-label">客胜</span>
-                            <span class="odds-value">${ml.away || '-'}</span>
+                            <span class="odds-value">${formatOdds(ml.away)}</span>
                         </div>
                     </div>
                 </div>
@@ -371,21 +397,25 @@
         function renderHandicap(full) {
             if (!full || !full.handicapLines || full.handicapLines.length === 0) return '';
 
-            const lines = full.handicapLines.map(line => `
-                <div class="market">
-                    <div class="market-title">让球(1/2)</div>
-                    <div class="market-grid two-col">
-                        <div class="odds-btn">
-                            <span class="hdp-label">${line.hdp || '0'}</span>
-                            <span class="odds-value">${line.home || '-'}</span>
-                        </div>
-                        <div class="odds-btn">
-                            <span class="hdp-label">${line.hdp ? -line.hdp : '0'}</span>
-                            <span class="odds-value">${line.away || '-'}</span>
+            const lines = full.handicapLines.slice(0, 6).map(line => {
+                const hdp = formatHandicapValue(line.hdp);
+                const awayHdp = formatHandicapValue(-line.hdp);
+                return `
+                    <div class="market">
+                        <div class="market-title">让球(全) ${hdp}</div>
+                        <div class="market-grid two-col">
+                            <div class="odds-btn">
+                                <span class="hdp-label">主 ${hdp}</span>
+                                <span class="odds-value">${formatOdds(line.home)}</span>
+                            </div>
+                            <div class="odds-btn">
+                                <span class="hdp-label">客 ${awayHdp}</span>
+                                <span class="odds-value">${formatOdds(line.away)}</span>
+                            </div>
                         </div>
                     </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
 
             return lines;
         }
@@ -394,21 +424,24 @@
         function renderOverUnder(full) {
             if (!full || !full.overUnderLines || full.overUnderLines.length === 0) return '';
 
-            const lines = full.overUnderLines.map(line => `
-                <div class="market">
-                    <div class="market-title">大小(O/U)</div>
-                    <div class="market-grid two-col">
-                        <div class="odds-btn">
-                            <span class="hdp-label">大 ${line.hdp || '0'}</span>
-                            <span class="odds-value">${line.over || '-'}</span>
-                        </div>
-                        <div class="odds-btn">
-                            <span class="hdp-label">小 ${line.hdp || '0'}</span>
-                            <span class="odds-value">${line.under || '-'}</span>
+            const lines = full.overUnderLines.slice(0, 6).map(line => {
+                const hdp = formatHandicapValue(line.hdp);
+                return `
+                    <div class="market">
+                        <div class="market-title">大小(全) ${hdp}</div>
+                        <div class="market-grid two-col">
+                            <div class="odds-btn">
+                                <span class="hdp-label">大 ${hdp}</span>
+                                <span class="odds-value">${formatOdds(line.over)}</span>
+                            </div>
+                            <div class="odds-btn">
+                                <span class="hdp-label">小 ${hdp}</span>
+                                <span class="odds-value">${formatOdds(line.under)}</span>
+                            </div>
                         </div>
                     </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
 
             return lines;
         }
@@ -417,21 +450,25 @@
         function renderHalfHandicap(half) {
             if (!half || !half.handicapLines || half.handicapLines.length === 0) return '';
 
-            const lines = half.handicapLines.map(line => `
-                <div class="market">
-                    <div class="market-title">让球(半场)</div>
-                    <div class="market-grid two-col">
-                        <div class="odds-btn">
-                            <span class="hdp-label">${line.hdp || '0'}</span>
-                            <span class="odds-value">${line.home || '-'}</span>
-                        </div>
-                        <div class="odds-btn">
-                            <span class="hdp-label">${line.hdp ? -line.hdp : '0'}</span>
-                            <span class="odds-value">${line.away || '-'}</span>
+            const lines = half.handicapLines.slice(0, 4).map(line => {
+                const hdp = formatHandicapValue(line.hdp);
+                const awayHdp = formatHandicapValue(-line.hdp);
+                return `
+                    <div class="market">
+                        <div class="market-title">让球(半) ${hdp}</div>
+                        <div class="market-grid two-col">
+                            <div class="odds-btn">
+                                <span class="hdp-label">主 ${hdp}</span>
+                                <span class="odds-value">${formatOdds(line.home)}</span>
+                            </div>
+                            <div class="odds-btn">
+                                <span class="hdp-label">客 ${awayHdp}</span>
+                                <span class="odds-value">${formatOdds(line.away)}</span>
+                            </div>
                         </div>
                     </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
 
             return lines;
         }
@@ -440,21 +477,24 @@
         function renderHalfOverUnder(half) {
             if (!half || !half.overUnderLines || half.overUnderLines.length === 0) return '';
 
-            const lines = half.overUnderLines.map(line => `
-                <div class="market">
-                    <div class="market-title">大小(半场)</div>
-                    <div class="market-grid two-col">
-                        <div class="odds-btn">
-                            <span class="hdp-label">大 ${line.hdp || '0'}</span>
-                            <span class="odds-value">${line.over || '-'}</span>
-                        </div>
-                        <div class="odds-btn">
-                            <span class="hdp-label">小 ${line.hdp || '0'}</span>
-                            <span class="odds-value">${line.under || '-'}</span>
+            const lines = half.overUnderLines.slice(0, 4).map(line => {
+                const hdp = formatHandicapValue(line.hdp);
+                return `
+                    <div class="market">
+                        <div class="market-title">大小(半) ${hdp}</div>
+                        <div class="market-grid two-col">
+                            <div class="odds-btn">
+                                <span class="hdp-label">大 ${hdp}</span>
+                                <span class="odds-value">${formatOdds(line.over)}</span>
+                            </div>
+                            <div class="odds-btn">
+                                <span class="hdp-label">小 ${hdp}</span>
+                                <span class="odds-value">${formatOdds(line.under)}</span>
+                            </div>
                         </div>
                     </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
 
             return lines;
         }
@@ -474,4 +514,3 @@
     </script>
 </body>
 </html>
-

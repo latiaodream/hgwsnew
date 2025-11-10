@@ -11,6 +11,7 @@ export interface AccountConfig {
 // 赛事数据
 export interface Match {
   gid: string;
+  lid?: string;
   home: string;
   home_zh: string;
   away: string;
@@ -22,6 +23,7 @@ export interface Match {
   home_score?: number;
   away_score?: number;
   showType: ShowType;
+  raw?: any;
   markets?: Markets;
 }
 
@@ -94,4 +96,3 @@ export interface ScraperStatus {
   errorCount: number;
   lastError?: string;
 }
-
