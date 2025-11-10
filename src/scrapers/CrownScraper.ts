@@ -29,6 +29,7 @@ export class CrownScraper {
   private suspendedUntil: number = 0;
   private suspensionReason: string = '';
   private lastSuspensionLog?: { context: string; time: number };
+  private enableMoreMarkets: boolean;
 
   constructor(account: AccountConfig) {
     this.account = account;
@@ -75,6 +76,8 @@ export class CrownScraper {
         return Promise.reject(error);
       }
     );
+
+    this.enableMoreMarkets = this.resolveMoreMarketsFlag();
 
     // 添加请求拦截器来自动发送 Cookie
     this.client.interceptors.request.use(
@@ -529,7 +532,9 @@ export class CrownScraper {
 
       const matches = this.parseMatches(data);
 
-      await this.enrichMatchesWithMoreMarkets(matches);
+      if (this.enableMoreMarkets) {
+        await this.enrichMatchesWithMoreMarkets(matches);
+      }
 
       logger.info(`[${this.account.showType}] 抓取到 ${matches.length} 场赛事`);
 
@@ -1197,6 +1202,12 @@ export class CrownScraper {
 
   getAccountLabel(): string {
     return this.account.username;
+  }
+
+  private resolveMoreMarketsFlag(): boolean {
+    const raw = (process.env.ENABLE_MORE_MARKETS || '').toLowerCase();
+    if (!raw) return false;
+    return ['1', 'true', 'yes', 'on'].includes(raw);
   }
 
   private shouldSkipBecauseSuspended(context: string): boolean {
