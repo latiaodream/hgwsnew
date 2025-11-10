@@ -43,27 +43,108 @@
             <button class="tab" data-type="early">早盘 (<span id="early-count">0</span>)</button>
         </div>
     </div>
+
+    <div id="auth-panel" style="background: white; padding: 20px; border-radius: 4px; margin-bottom: 10px; display: none;">
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <input type="password" id="token-input" placeholder="请输入访问密钥" style="flex: 1; padding: 8px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 13px;">
+            <button id="auth-btn" style="padding: 8px 20px; background: #1890ff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px;">连接</button>
+        </div>
+        <div id="auth-error" style="color: #ff4d4f; font-size: 12px; margin-top: 8px; display: none;"></div>
+    </div>
+
     <div id="matches-container"></div>
     <script>
         let ws = null, currentType = 'live', matchesData = { live: [], today: [], early: [] };
-        function init() { connectWebSocket(); setupTabs(); }
+        let userToken = localStorage.getItem('crown_token') || '';
+        let isAuthenticated = false;
+
+        function init() {
+            setupAuth();
+            setupTabs();
+            if (userToken) {
+                connectWebSocket();
+            } else {
+                showAuthPanel();
+            }
+        }
+
+        function setupAuth() {
+            const authBtn = document.getElementById('auth-btn');
+            const tokenInput = document.getElementById('token-input');
+
+            authBtn.addEventListener('click', () => {
+                const token = tokenInput.value.trim();
+                if (!token) {
+                    showAuthError('请输入访问密钥');
+                    return;
+                }
+                userToken = token;
+                localStorage.setItem('crown_token', token);
+                hideAuthPanel();
+                connectWebSocket();
+            });
+
+            tokenInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') authBtn.click();
+            });
+        }
+
+        function showAuthPanel() {
+            document.getElementById('auth-panel').style.display = 'block';
+        }
+
+        function hideAuthPanel() {
+            document.getElementById('auth-panel').style.display = 'none';
+            document.getElementById('auth-error').style.display = 'none';
+        }
+
+        function showAuthError(msg) {
+            const errorEl = document.getElementById('auth-error');
+            errorEl.textContent = msg;
+            errorEl.style.display = 'block';
+        }
+
         function connectWebSocket() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             ws = new WebSocket(`${protocol}//${window.location.host}`);
-            ws.onopen = () => { console.log('WebSocket连接成功'); ws.send(JSON.stringify({ type: 'auth', data: { token: 'crown-scraper-2024' } })); };
+            ws.onopen = () => {
+                console.log('WebSocket连接成功');
+                ws.send(JSON.stringify({ type: 'auth', data: { token: userToken } }));
+            };
             ws.onmessage = (event) => { try { handleMessage(JSON.parse(event.data)); } catch (error) { console.error('解析消息失败:', error); } };
-            ws.onerror = (error) => console.error('WebSocket错误:', error);
-            ws.onclose = () => { console.log('WebSocket连接关闭，3秒后重连...'); setTimeout(connectWebSocket, 3000); };
+            ws.onerror = (error) => {
+                console.error('WebSocket错误:', error);
+                showAuthError('连接失败，请检查网络或密钥是否正确');
+                showAuthPanel();
+            };
+            ws.onclose = () => {
+                console.log('WebSocket连接关闭，3秒后重连...');
+                if (isAuthenticated) {
+                    setTimeout(connectWebSocket, 3000);
+                }
+            };
         }
+
         function handleMessage(message) {
-            if (message.type === 'full_data') {
+            if (message.type === 'auth_success') {
+                isAuthenticated = true;
+                hideAuthPanel();
+                console.log('认证成功');
+            } else if (message.type === 'auth_failed') {
+                isAuthenticated = false;
+                showAuthError('密钥错误，请重新输入');
+                showAuthPanel();
+                if (ws) ws.close();
+            } else if (message.type === 'full_data') {
                 const showType = message.data.showType;
                 matchesData[showType] = message.data.matches || [];
                 updateCount(showType, matchesData[showType].length);
                 if (showType === currentType) renderMatches();
             }
         }
+
         function updateCount(type, count) { const countEl = document.getElementById(`${type}-count`); if (countEl) countEl.textContent = count; }
+
         function setupTabs() {
             document.querySelectorAll('.tab').forEach(tab => {
                 tab.addEventListener('click', () => {
