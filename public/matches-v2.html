@@ -53,6 +53,26 @@
         const WS_URL = `${protocol}//${window.location.host}/ws`;
         const AUTH_TOKEN = 'atiaolatiaozhurenzhuren';
         let isAuthenticated = false;
+        const isEmptyValue = (value) => value === null || value === undefined || value === '';
+        const formatOdd = (value) => {
+            if (isEmptyValue(value)) return '-';
+            const num = Number(value);
+            return Number.isFinite(num) ? num.toFixed(2) : '-';
+        };
+        const formatLine = (value, showSign = false) => {
+            if (isEmptyValue(value)) return '-';
+            const num = Number(value);
+            if (!Number.isFinite(num)) return '-';
+            const rounded = Math.abs(num % 1) < 1e-6 ? num.toFixed(0) : num.toFixed(2);
+            const display = rounded === '-0' ? '0' : rounded;
+            if (showSign && num > 0) {
+                return `+${display}`;
+            }
+            if (showSign && num < 0 && !display.startsWith('-')) {
+                return `-${display}`;
+            }
+            return display;
+        };
 
         function init() {
             setupTabs();
@@ -180,36 +200,38 @@
             if (!markets?.moneyline) return '<div class="market"><div class="market-title">独赢(1/2/X)</div><div class="empty-cell">-</div></div>';
             const m = markets.moneyline;
             return `<div class="market"><div class="market-title">独赢(1/2/X)</div><div class="market-moneyline">
-                <div class="odds-btn ${!m.home ? 'disabled' : ''}">${m.home || '-'}</div>
-                <div class="odds-btn ${!m.draw ? 'disabled' : ''}">${m.draw || '-'}</div>
-                <div class="odds-btn ${!m.away ? 'disabled' : ''}">${m.away || '-'}</div>
+                <div class="odds-btn ${isEmptyValue(m.home) ? 'disabled' : ''}">${formatOdd(m.home)}</div>
+                <div class="odds-btn ${isEmptyValue(m.draw) ? 'disabled' : ''}">${formatOdd(m.draw)}</div>
+                <div class="odds-btn ${isEmptyValue(m.away) ? 'disabled' : ''}">${formatOdd(m.away)}</div>
             </div></div>`;
         }
         function renderHandicap(market, title) {
-            if (!market?.handicapLines || market.handicapLines.length === 0) return `<div class="market"><div class="market-title">${title}</div><div class="empty-cell">-</div></div>`;
-            const lines = market.handicapLines.slice(0, 2).map(line => `<div class="market-row">
-                <div class="hdp-label">${line.hdp || '0'}</div>
-                <div class="odds-btn ${!line.home ? 'disabled' : ''}">${line.home || '-'}</div>
-                <div class="odds-btn ${!line.away ? 'disabled' : ''}">${line.away || '-'}</div>
+            const lines = Array.isArray(market?.handicapLines) ? market.handicapLines.filter(Boolean) : [];
+            if (!lines.length) return `<div class="market"><div class="market-title">${title}</div><div class="empty-cell">-</div></div>`;
+            const rows = lines.map(line => `<div class="market-row">
+                <div class="hdp-label">${formatLine(line.hdp, true)}</div>
+                <div class="odds-btn ${isEmptyValue(line.home) ? 'disabled' : ''}">${formatOdd(line.home)}</div>
+                <div class="odds-btn ${isEmptyValue(line.away) ? 'disabled' : ''}">${formatOdd(line.away)}</div>
             </div>`).join('');
-            return `<div class="market"><div class="market-title">${title}</div><div class="market-handicap">${lines}</div></div>`;
+            return `<div class="market"><div class="market-title">${title}</div><div class="market-handicap">${rows}</div></div>`;
         }
         function renderOverUnder(market, title) {
-            if (!market?.overUnderLines || market.overUnderLines.length === 0) return `<div class="market"><div class="market-title">${title}</div><div class="empty-cell">-</div></div>`;
-            const lines = market.overUnderLines.slice(0, 2).map(line => `<div class="market-row">
-                <div class="hdp-label">${line.hdp || '0'}</div>
-                <div class="odds-btn ${!line.over ? 'disabled' : ''}">${line.over || '-'}</div>
-                <div class="odds-btn ${!line.under ? 'disabled' : ''}">${line.under || '-'}</div>
+            const lines = Array.isArray(market?.overUnderLines) ? market.overUnderLines.filter(Boolean) : [];
+            if (!lines.length) return `<div class="market"><div class="market-title">${title}</div><div class="empty-cell">-</div></div>`;
+            const rows = lines.map(line => `<div class="market-row">
+                <div class="hdp-label">${formatLine(line.hdp)}</div>
+                <div class="odds-btn ${isEmptyValue(line.over) ? 'disabled' : ''}">${formatOdd(line.over)}</div>
+                <div class="odds-btn ${isEmptyValue(line.under) ? 'disabled' : ''}">${formatOdd(line.under)}</div>
             </div>`).join('');
-            return `<div class="market"><div class="market-title">${title}</div><div class="market-overunder">${lines}</div></div>`;
+            return `<div class="market"><div class="market-title">${title}</div><div class="market-overunder">${rows}</div></div>`;
         }
         function renderMoneylineHalf(markets) {
             if (!markets?.half?.moneyline) return '<div class="market"><div class="market-title">独赢(半场)</div><div class="empty-cell">-</div></div>';
             const m = markets.half.moneyline;
             return `<div class="market"><div class="market-title">独赢(半场)</div><div class="market-moneyline">
-                <div class="odds-btn ${!m.home ? 'disabled' : ''}">${m.home || '-'}</div>
-                <div class="odds-btn ${!m.draw ? 'disabled' : ''}">${m.draw || '-'}</div>
-                <div class="odds-btn ${!m.away ? 'disabled' : ''}">${m.away || '-'}</div>
+                <div class="odds-btn ${isEmptyValue(m.home) ? 'disabled' : ''}">${formatOdd(m.home)}</div>
+                <div class="odds-btn ${isEmptyValue(m.draw) ? 'disabled' : ''}">${formatOdd(m.draw)}</div>
+                <div class="odds-btn ${isEmptyValue(m.away) ? 'disabled' : ''}">${formatOdd(m.away)}</div>
             </div></div>`;
         }
         init();

@@ -89,6 +89,10 @@ EARLY_FETCH_INTERVAL=30
 # 皇冠 API 配置
 CROWN_API_BASE_URL=https://api.example.com
 CROWN_SITE_URL=https://www.example.com
+
+# 多盘口抓取
+# 0 或留空表示对全部赛事抓取更多盘口，正整数限制抓取数量，负数可禁用
+MORE_MARKETS_LIMIT=0
 ```
 
 ## 开发
@@ -381,4 +385,3 @@ tail -f logs/error.log
 ## 许可证
 
 ISC
-

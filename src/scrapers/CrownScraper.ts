@@ -534,10 +534,21 @@ export class CrownScraper {
   private async enrichMatchesWithMoreMarkets(matches: Match[]): Promise<void> {
     if (!Array.isArray(matches) || matches.length === 0) return;
 
-    const defaultLimit = this.account.showType === 'live' ? 30 : 15;
     const limitEnv = process.env.MORE_MARKETS_LIMIT;
-    const limit = limitEnv ? Number(limitEnv) : defaultLimit;
-    const maxCount = Number.isFinite(limit) && limit > 0 ? limit : defaultLimit;
+    let maxCount = matches.length;
+
+    if (limitEnv !== undefined) {
+      const parsedLimit = Number(limitEnv);
+      if (Number.isFinite(parsedLimit)) {
+        if (parsedLimit > 0) {
+          maxCount = Math.min(parsedLimit, matches.length);
+        } else if (parsedLimit < 0) {
+          logger.debug(`[${this.account.showType}] MORE_MARKETS_LIMIT < 0, 跳过更多盘口抓取`);
+          return;
+        }
+      }
+    }
+
     const targets = matches.slice(0, maxCount);
 
     for (const match of targets) {
