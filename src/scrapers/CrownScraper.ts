@@ -612,7 +612,21 @@ export class CrownScraper {
         },
       });
 
-      const parsed = await this.parseXmlResponse(response.data);
+      if (typeof response.data === 'string') {
+        const trimmed = response.data.trim();
+        if (!trimmed.startsWith('<')) {
+          logger.warn(`[${this.account.showType}] get_game_more 返回非 XML: ${trimmed.slice(0, 120)}`);
+          return null;
+        }
+      }
+
+      let parsed;
+      try {
+        parsed = await this.parseXmlResponse(response.data);
+      } catch (error: any) {
+        logger.warn(`[${this.account.showType}] 解析 get_game_more XML 失败 (GID: ${match.gid}): ${error?.message || error}`);
+        return null;
+      }
       const serverResponse = parsed?.serverresponse || parsed;
       const markets = this.parseMoreMarkets(serverResponse);
       return markets;
