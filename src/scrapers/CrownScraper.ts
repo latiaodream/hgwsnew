@@ -704,7 +704,7 @@ export class CrownScraper {
       overUnderLines: [],
     };
 
-    // 全场让球 - 使用小写字段名
+    // 全场让球 - 主盘口
     const ratioR = pick(['ratio', 'RATIO_RE', 'RATIO_R', 'STRONG']);
     const ratioRH = pick(['ior_RH', 'IOR_RH']);
     const ratioRC = pick(['ior_RC', 'IOR_RC']);
@@ -720,7 +720,26 @@ export class CrownScraper {
       }
     }
 
-    // 全场大小球 - 使用小写字段名
+    // 全场让球 - A/B/C/D/E/F 盘口
+    const handicapPrefixes = ['a', 'b', 'c', 'd', 'e', 'f'];
+    for (const prefix of handicapPrefixes) {
+      const ratio = pick([`ratio_${prefix}r`, `RATIO_${prefix.toUpperCase()}R`]);
+      const home = pick([`ior_${prefix.toUpperCase()}RH`, `IOR_${prefix.toUpperCase()}RH`]);
+      const away = pick([`ior_${prefix.toUpperCase()}RC`, `IOR_${prefix.toUpperCase()}RC`]);
+
+      if (ratio || home || away) {
+        const hdp = this.parseHandicap(ratio);
+        if (hdp !== null && markets.full?.handicapLines) {
+          markets.full.handicapLines.push({
+            hdp,
+            home: this.parseOddsValue(home) || 0,
+            away: this.parseOddsValue(away) || 0,
+          });
+        }
+      }
+    }
+
+    // 全场大小球 - 主盘口
     const ratioO = pick(['ratio_o', 'ratio_u', 'RATIO_O']);
     const ratioOUH = pick(['ior_OUH', 'IOR_OUH']);
     const ratioOUC = pick(['ior_OUC', 'IOR_OUC']);
@@ -736,13 +755,32 @@ export class CrownScraper {
       }
     }
 
+    // 全场大小球 - A/B/C/D/E/F 盘口
+    const ouPrefixes = ['a', 'b', 'c', 'd', 'e', 'f'];
+    for (const prefix of ouPrefixes) {
+      const ratio = pick([`ratio_${prefix}ouo`, `ratio_${prefix}ouu`, `RATIO_${prefix.toUpperCase()}OUO`]);
+      const under = pick([`ior_${prefix.toUpperCase()}OUO`, `IOR_${prefix.toUpperCase()}OUO`]);
+      const over = pick([`ior_${prefix.toUpperCase()}OUU`, `IOR_${prefix.toUpperCase()}OUU`]);
+
+      if (ratio || under || over) {
+        const hdp = this.parseHandicap(ratio);
+        if (hdp !== null && markets.full?.overUnderLines) {
+          markets.full.overUnderLines.push({
+            hdp,
+            over: this.parseOddsValue(over) || 0,
+            under: this.parseOddsValue(under) || 0,
+          });
+        }
+      }
+    }
+
     // 半场让球和大小球
     markets.half = {
       handicapLines: [],
       overUnderLines: [],
     };
 
-    // 半场让球 - 使用小写字段名
+    // 半场让球 - 主盘口
     const ratioHR = pick(['hratio', 'RATIO_HR', 'HSTRONG']);
     const ratioHRH = pick(['ior_HRH', 'IOR_HRH']);
     const ratioHRC = pick(['ior_HRC', 'IOR_HRC']);
@@ -758,7 +796,7 @@ export class CrownScraper {
       }
     }
 
-    // 半场大小球 - 使用小写字段名
+    // 半场大小球 - 主盘口
     const ratioHO = pick(['ratio_ho', 'ratio_hu', 'RATIO_HO']);
     const ratioHOUH = pick(['ior_HOUH', 'IOR_HOUH']);
     const ratioHOUC = pick(['ior_HOUC', 'IOR_HOUC']);

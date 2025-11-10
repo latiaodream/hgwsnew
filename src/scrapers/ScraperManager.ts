@@ -95,9 +95,10 @@ export class ScraperManager extends EventEmitter {
 
   /**
    * 启动轮询模式（用于相同账号）
+   * 每1小时切换一次账号，每个账号抓取1小时
    */
   private async startRotation(): Promise<void> {
-    logger.info('🔄 启动轮询模式...');
+    logger.info('🔄 启动轮询模式（每1小时切换账号）...');
 
     // 只保留队列中存在的类型
     this.showTypeQueue = this.showTypeQueue.filter(type => this.scrapers.has(type));
@@ -107,30 +108,82 @@ export class ScraperManager extends EventEmitter {
       return;
     }
 
-    // 立即执行一次
-    await this.fetchRotation();
+    // 立即登录并开始抓取第一个账号
+    await this.rotateAccount();
 
-    // 设置定时任务（每 5 秒轮询一次）
+    // 设置定时任务（每1小时切换一次账号）
     const timer = setInterval(async () => {
-      await this.fetchRotation();
-    }, 5000);
+      await this.rotateAccount();
+    }, 60 * 60 * 1000); // 1小时 = 60分钟 * 60秒 * 1000毫秒
 
     this.intervals.set('rotation' as ShowType, timer);
   }
 
   /**
-   * 轮询抓取
+   * 切换账号并重新登录
    */
-  private async fetchRotation(): Promise<void> {
-    if (!this.sharedScraper || this.showTypeQueue.length === 0) return;
+  private async rotateAccount(): Promise<void> {
+    if (!this.sharedScraper) return;
 
-    // 获取当前要抓取的类型
-    const showType = this.showTypeQueue[0];
+    try {
+      // 先登出当前账号
+      logger.info('🚪 登出当前账号...');
+      await this.sharedScraper.logout();
 
-    // 轮换到下一个
-    this.showTypeQueue.push(this.showTypeQueue.shift()!);
+      // 等待1秒
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-    logger.debug(`🔄 轮询抓取: ${showType}`);
+      // 重新登录
+      logger.info('🔐 重新登录账号...');
+      const loginSuccess = await this.sharedScraper.login();
+
+      if (!loginSuccess) {
+        logger.error('❌ 账号登录失败');
+        return;
+      }
+
+      logger.info('✅ 账号登录成功，开始抓取数据');
+
+      // 开始抓取所有类型的数据（每5秒轮询一次）
+      await this.startFetchingAllTypes();
+
+    } catch (error: any) {
+      logger.error('❌ 切换账号失败:', error.message);
+    }
+  }
+
+  /**
+   * 开始抓取所有类型的数据（每5秒轮询一次）
+   */
+  private async startFetchingAllTypes(): Promise<void> {
+    // 清除之前的抓取定时器
+    for (const showType of this.showTypeQueue) {
+      const timer = this.intervals.get(showType);
+      if (timer) {
+        clearInterval(timer);
+        this.intervals.delete(showType);
+      }
+    }
+
+    // 为每个类型设置独立的抓取定时器（每5秒一次）
+    for (const showType of this.showTypeQueue) {
+      // 立即执行一次
+      await this.fetchType(showType);
+
+      // 设置定时任务
+      const timer = setInterval(async () => {
+        await this.fetchType(showType);
+      }, 5000);
+
+      this.intervals.set(showType, timer);
+    }
+  }
+
+  /**
+   * 抓取指定类型的数据
+   */
+  private async fetchType(showType: ShowType): Promise<void> {
+    if (!this.sharedScraper) return;
 
     try {
       // 使用共享抓取器抓取数据
@@ -155,7 +208,7 @@ export class ScraperManager extends EventEmitter {
       status.lastError = undefined;
       status.isRunning = true;
 
-      logger.debug(`[${showType}] 抓取完成，共 ${matches.length} 场赛事`);
+      logger.info(`[${showType}] 抓取到 ${matches.length} 场赛事`);
     } catch (error: any) {
       logger.error(`[${showType}] 抓取失败:`, error.message);
       const status = this.status.get(showType)!;

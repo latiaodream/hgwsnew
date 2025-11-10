@@ -316,18 +316,18 @@
                 <div class="match-card">
                     <div class="match-main">
                         <div class="match-info">
-                            <div class="league">${match.league || ''}</div>
+                            <div class="league">${match.league || match.league_zh || ''}</div>
                             <div class="teams">
                                 <div class="team">
-                                    <span class="team-name">${match.homeTeam}</span>
-                                    ${match.homeScore !== undefined ? `<span class="score">${match.homeScore}</span>` : ''}
+                                    <span class="team-name">${match.home || match.home_zh || ''}</span>
+                                    ${match.home_score !== undefined ? `<span class="score">${match.home_score}</span>` : ''}
                                 </div>
                                 <div class="team">
-                                    <span class="team-name">${match.awayTeam}</span>
-                                    ${match.awayScore !== undefined ? `<span class="score">${match.awayScore}</span>` : ''}
+                                    <span class="team-name">${match.away || match.away_zh || ''}</span>
+                                    ${match.away_score !== undefined ? `<span class="score">${match.away_score}</span>` : ''}
                                 </div>
                             </div>
-                            <div class="match-time">${match.matchTime || ''}</div>
+                            <div class="match-time">${match.match_time || ''}</div>
                         </div>
 
                         <div class="markets">
