@@ -798,8 +798,21 @@ export class CrownScraper {
     // 辅助函数：从多个候选字段中选择第一个有值的
     const pick = (keys: string[]): any => {
       for (const key of keys) {
-        if (game[key] !== undefined && game[key] !== null && game[key] !== '') {
-          return game[key];
+        const candidates = [key];
+        const lower = key.toLowerCase();
+        const upper = key.toUpperCase();
+
+        if (!candidates.includes(lower)) {
+          candidates.push(lower);
+        }
+        if (!candidates.includes(upper)) {
+          candidates.push(upper);
+        }
+
+        for (const candidate of candidates) {
+          if (game[candidate] !== undefined && game[candidate] !== null && game[candidate] !== '') {
+            return game[candidate];
+          }
         }
       }
       return undefined;
@@ -808,9 +821,9 @@ export class CrownScraper {
     const markets: Markets = {};
 
     // 独赢（Moneyline）- 使用小写字段名
-    const mh = pick(['ior_MH', 'IOR_MH']);
-    const mn = pick(['ior_MN', 'IOR_MN']);
-    const mc = pick(['ior_MC', 'IOR_MC']);
+    const mh = pick(['ior_rmh', 'ior_mh', 'ratio_mh', 'ratio_rmh']);
+    const mn = pick(['ior_rmn', 'ior_rmd', 'ior_mn', 'ratio_mn']);
+    const mc = pick(['ior_rmc', 'ior_mc', 'ratio_mc']);
 
     if (mh || mn || mc) {
       markets.moneyline = {
@@ -827,9 +840,9 @@ export class CrownScraper {
     };
 
     // 全场让球 - 主盘口
-    const ratioR = pick(['ratio', 'RATIO_RE', 'RATIO_R', 'STRONG']);
-    const ratioRH = pick(['ior_RH', 'IOR_RH']);
-    const ratioRC = pick(['ior_RC', 'IOR_RC']);
+    const ratioR = pick(['ratio', 'ratio_re', 'ratio_r', 'strong']);
+    const ratioRH = pick(['ior_reh', 'ior_rh', 'ratio_rh']);
+    const ratioRC = pick(['ior_rec', 'ior_rc', 'ratio_rc']);
 
     if (ratioR || ratioRH || ratioRC) {
       const hdp = this.parseHandicap(ratioR);
@@ -862,9 +875,9 @@ export class CrownScraper {
     }
 
     // 全场大小球 - 主盘口
-    const ratioO = pick(['ratio_o', 'ratio_u', 'ratio_ouo', 'ratio_ouu', 'RATIO_O', 'RATIO_OUO', 'RATIO_OUU']);
-    const ratioOUH = pick(['ior_OUH', 'IOR_OUH']);
-    const ratioOUC = pick(['ior_OUC', 'IOR_OUC']);
+    const ratioO = pick(['ratio_rouo', 'ratio_rouu', 'ratio_o', 'ratio_u', 'ratio_ouo', 'ratio_ouu']);
+    const ratioOUH = pick(['ior_rouh', 'ior_ouh', 'ratio_ouh']);
+    const ratioOUC = pick(['ior_rouc', 'ior_ouc', 'ratio_ouc']);
 
     if (ratioO || ratioOUH || ratioOUC) {
       const hdp = this.parseHandicap(ratioO);
@@ -903,9 +916,9 @@ export class CrownScraper {
     };
 
     // 半场让球 - 主盘口
-    const ratioHR = pick(['hratio', 'RATIO_HR', 'HSTRONG']);
-    const ratioHRH = pick(['ior_HRH', 'IOR_HRH']);
-    const ratioHRC = pick(['ior_HRC', 'IOR_HRC']);
+    const ratioHR = pick(['hratio', 'ratio_hre', 'ratio_hr', 'hstrong']);
+    const ratioHRH = pick(['ior_hreh', 'ior_hrh', 'ratio_hrh']);
+    const ratioHRC = pick(['ior_hrec', 'ior_hrc', 'ratio_hrc']);
 
     if (ratioHR || ratioHRH || ratioHRC) {
       const hdp = this.parseHandicap(ratioHR);
@@ -919,9 +932,9 @@ export class CrownScraper {
     }
 
     // 半场大小球 - 主盘口
-    const ratioHO = pick(['ratio_ho', 'ratio_hu', 'ratio_houo', 'ratio_houu', 'RATIO_HO', 'RATIO_HOUO', 'RATIO_HOUU']);
-    const ratioHOUH = pick(['ior_HOUH', 'IOR_HOUH']);
-    const ratioHOUC = pick(['ior_HOUC', 'IOR_HOUC']);
+    const ratioHO = pick(['ratio_hrouo', 'ratio_hrouu', 'ratio_ho', 'ratio_hu', 'ratio_houo', 'ratio_houu']);
+    const ratioHOUH = pick(['ior_hrouh', 'ior_houh', 'ratio_houh']);
+    const ratioHOUC = pick(['ior_hrouc', 'ior_houc', 'ratio_houc']);
 
     if (ratioHO || ratioHOUH || ratioHOUC) {
       const hdp = this.parseHandicap(ratioHO);
