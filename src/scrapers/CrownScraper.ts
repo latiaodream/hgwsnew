@@ -423,6 +423,7 @@ export class CrownScraper {
       logger.info(`[${this.account.showType}] 🚪 开始登出 (UID: ${uid})...`);
 
       // 尝试调用登出 API（可能不存在，但尝试一下）
+      // 只尝试最常见的路径，避免产生过多日志
       try {
         const params = new URLSearchParams({
           p: 'logout',
@@ -431,11 +432,31 @@ export class CrownScraper {
           langx: 'zh-cn',
         });
 
-        await this.postTransform(params.toString());
-        logger.info(`[${this.account.showType}] ✅ 登出 API 调用成功`);
+        // 只尝试最常见的两个路径，减少日志噪音
+        const logoutPaths = [
+          `/transform.php?ver=${this.version}`,
+          `/app/member/transform.php?ver=${this.version}`,
+        ];
+
+        let logoutSuccess = false;
+        for (const path of logoutPaths) {
+          try {
+            await this.client.post(path, params.toString());
+            logger.info(`[${this.account.showType}] ✅ 登出 API 调用成功`);
+            logoutSuccess = true;
+            break;
+          } catch (err: any) {
+            // 静默失败，不记录日志
+            continue;
+          }
+        }
+
+        if (!logoutSuccess) {
+          logger.debug(`[${this.account.showType}] 登出 API 不可用（正常现象）`);
+        }
       } catch (apiError: any) {
         // 登出 API 可能不存在或返回 404，这是正常的
-        logger.warn(`[${this.account.showType}] ⚠️ 登出 API 调用失败（可能不存在）: ${apiError.message}`);
+        logger.debug(`[${this.account.showType}] 登出 API 调用失败: ${apiError.message}`);
       }
 
     } catch (error: any) {
