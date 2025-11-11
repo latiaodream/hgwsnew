@@ -19,8 +19,11 @@ export class ScraperManager extends EventEmitter {
   private activeAccountIndex: Map<ShowType, number> = new Map();
   private rotationTimers: Map<ShowType, NodeJS.Timeout> = new Map();
   private rotating: Set<ShowType> = new Set();
-  private readonly rotationIntervalMinutes = parseInt(process.env.ACCOUNT_ROTATION_MINUTES || '60', 10);
-  private readonly rotationRestMinutes = parseInt(process.env.ACCOUNT_ROTATION_REST_MINUTES || '10', 10);
+  private readonly rotationIntervalMinutes: Map<ShowType, number> = new Map([
+    ['live', parseInt(process.env.LIVE_ROTATION_MINUTES || '30', 10)],
+    ['today', parseInt(process.env.TODAY_ROTATION_MINUTES || '60', 10)],
+    ['early', parseInt(process.env.EARLY_ROTATION_MINUTES || '60', 10)],
+  ]);
 
   constructor() {
     super();
@@ -255,10 +258,18 @@ export class ScraperManager extends EventEmitter {
     }
 
     logger.info(`启动抓取器: ${showType}`);
-    
+
     // 更新状态
     const status = this.status.get(showType)!;
     status.isRunning = true;
+
+    // 早盘特殊处理：抓取一次后立即退出，等待下次轮换
+    if (showType === 'early') {
+      await this.fetchAndUpdate(showType);
+      logger.info(`[${showType}] 早盘抓取完成，退出账号等待下次轮换`);
+      await scraper.logout();
+      return;
+    }
 
     // 立即执行一次
     await this.fetchAndUpdate(showType);
@@ -338,21 +349,13 @@ export class ScraperManager extends EventEmitter {
     const status = this.status.get(showType)!;
 
     if (!scraper) return;
-    if (scraper.isSuspended()) {
-      const info = scraper.getSuspensionInfo();
-      logger.warn(
-        `[${showType}] 当前账号 ${scraper.getAccountLabel()} 冷却中 (${info?.reason || '未知原因'})`
-      );
 
-      const rotated = await this.rotateAccountForShowType(showType, { skipRest: true });
-      if (!rotated) {
-        return;
-      }
-    }
+    // 不再检查账号暂停状态，按时间轮换即可
+    // 即使遇到风险提示也继续抓取，直到时间到了才换账号
 
     try {
       logger.debug(`[${showType}] 开始抓取...`);
-      
+
       const matches = await scraper.fetchMatches();
       const cache = this.matchesCache.get(showType)!;
       const oldMatches = new Map(cache);
@@ -376,6 +379,7 @@ export class ScraperManager extends EventEmitter {
       logger.error(`[${showType}] 抓取失败:`, error.message);
       status.errorCount++;
       status.lastError = error.message;
+      // 即使失败也继续，等待定时轮换
     }
   }
 
@@ -460,15 +464,16 @@ export class ScraperManager extends EventEmitter {
   }
 
   private setupAccountRotationSchedules(): void {
-    if (!Number.isFinite(this.rotationIntervalMinutes) || this.rotationIntervalMinutes <= 0) {
-      return;
-    }
-
     for (const [showType, pool] of this.accountPools.entries()) {
       if (pool.length <= 1) continue;
       if (this.rotationTimers.has(showType)) continue;
 
-      const intervalMs = this.rotationIntervalMinutes * 60 * 1000;
+      const rotationMinutes = this.rotationIntervalMinutes.get(showType) || 60;
+      if (!Number.isFinite(rotationMinutes) || rotationMinutes <= 0) {
+        continue;
+      }
+
+      const intervalMs = rotationMinutes * 60 * 1000;
       const timer = setInterval(() => {
         this.rotateAccountForShowType(showType).catch(error =>
           logger.error(`[${showType}] 定时轮换失败: ${error?.message || error}`)
@@ -477,7 +482,7 @@ export class ScraperManager extends EventEmitter {
 
       this.rotationTimers.set(showType, timer);
       logger.info(
-        `[${showType}] 启动账号轮换：池大小 ${pool.length}，每 ${this.rotationIntervalMinutes} 分钟切换一次`
+        `[${showType}] 启动账号轮换：池大小 ${pool.length}，每 ${rotationMinutes} 分钟切换一次`
       );
     }
   }
@@ -487,6 +492,7 @@ export class ScraperManager extends EventEmitter {
     options?: { skipRest?: boolean }
   ): Promise<boolean> {
     if (this.rotating.has(showType)) {
+      logger.info(`[${showType}] 账号轮换正在进行中，跳过本次轮换`);
       return false;
     }
 
@@ -501,37 +507,45 @@ export class ScraperManager extends EventEmitter {
       const nextIndex = this.getNextAccountIndex(showType);
       if (nextIndex === null) return false;
 
-      logger.info(`[${showType}] 正在轮换账号，目标: ${pool[nextIndex].username}`);
+      const rotationMinutes = this.rotationIntervalMinutes.get(showType) || 60;
+      logger.info(`[${showType}] ⏰ 时间到（${rotationMinutes}分钟），开始轮换账号`);
+      logger.info(`[${showType}] 目标账号: ${pool[nextIndex].username}`);
 
+      // 1. 停止当前抓取任务
       const oldScraper = this.scrapers.get(showType);
       this.stop(showType);
+      logger.info(`[${showType}] ✅ 已停止抓取任务`);
 
+      // 2. 强制退出当前账号（不管任何错误）
       if (oldScraper) {
         try {
+          logger.info(`[${showType}] 正在退出当前账号...`);
           await oldScraper.logout();
+          logger.info(`[${showType}] ✅ 当前账号已退出`);
         } catch (error: any) {
-          logger.warn(`[${showType}] 账号登出失败: ${error?.message || error}`);
+          logger.warn(`[${showType}] ⚠️ 账号登出失败（忽略）: ${error?.message || error}`);
         }
       }
 
-      const restMs = options?.skipRest
-        ? 0
-        : Math.max(0, this.rotationRestMinutes) * 60 * 1000;
-      if (restMs > 0) {
-        logger.info(`[${showType}] 进入冷却 ${this.rotationRestMinutes} 分钟后切换账号`);
-        await new Promise(resolve => setTimeout(resolve, restMs));
-      }
+      // 3. 等待一小段时间（避免立即登录）
+      logger.info(`[${showType}] 等待 3 秒后登录新账号...`);
+      await new Promise(resolve => setTimeout(resolve, 3000));
 
+      // 4. 创建新的抓取器并登录
       const nextAccount = pool[nextIndex];
+      logger.info(`[${showType}] 正在登录新账号: ${nextAccount.username}`);
       const newScraper = new CrownScraper(nextAccount);
       this.scrapers.set(showType, newScraper);
       this.activeAccountIndex.set(showType, nextIndex);
 
+      // 5. 启动新的抓取任务
       await this.start(showType);
-      logger.info(`[${showType}] 账号切换完成 -> ${nextAccount.username}`);
+      logger.info(`[${showType}] ✅ 账号切换完成 -> ${nextAccount.username}`);
+      logger.info(`[${showType}] 下次轮换时间: ${rotationMinutes} 分钟后`);
       return true;
     } catch (error: any) {
-      logger.error(`[${showType}] 账号轮换失败: ${error?.message || error}`);
+      logger.error(`[${showType}] ❌ 账号轮换失败: ${error?.message || error}`);
+      // 即使失败也继续，不影响下次轮换
       return false;
     } finally {
       this.rotating.delete(showType);

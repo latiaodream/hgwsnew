@@ -1304,9 +1304,11 @@ export class CrownScraper {
 
     switch (flag) {
       case 'check_emnu':
-        duration = 15 * 60 * 1000;
-        reason = '检测到 CheckEMNU 安全校验';
-        break;
+        // 忽略 CheckEMNU，只记录日志，不暂停账号
+        logger.warn(
+          `[${this.account.showType}] 检测到 CheckEMNU 安全校验 (${context})，忽略并继续运行`
+        );
+        return; // 直接返回，不暂停账号
       case 'double_login':
         duration = 10 * 60 * 1000;
         reason = '疑似重复登录';

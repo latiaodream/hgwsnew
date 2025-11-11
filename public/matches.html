@@ -356,6 +356,15 @@
         function renderMarkets(markets) {
             let html = '<div class="markets-section">';
 
+            // 调试：打印markets数据
+            if (markets.full?.handicapLines?.length > 1 || markets.full?.overUnderLines?.length > 1) {
+                console.log('多盘口数据:', {
+                    handicapLines: markets.full?.handicapLines?.length,
+                    overUnderLines: markets.full?.overUnderLines?.length,
+                    markets: markets
+                });
+            }
+
             // 独赢
             if (markets.moneyline && (markets.moneyline.home || markets.moneyline.draw || markets.moneyline.away)) {
                 html += `
