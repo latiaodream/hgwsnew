@@ -9,7 +9,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as http from 'http';
 import mappingRouter from './routes/mapping';
+import leagueMappingRouter from './routes/league-mapping';
 import thirdpartyRouter, { setThirdPartyManager } from './routes/thirdparty';
+import matchesRouter, { setScraperManager } from './routes/matches';
+import { testConnection, initDatabase, closeDatabase } from './config/database';
 
 // 加载环境变量
 dotenv.config();
@@ -43,7 +46,9 @@ class Application {
 
     // API 路由
     this.expressApp.use('/api/mapping', mappingRouter);
+    this.expressApp.use('/api/league-mapping', leagueMappingRouter);
     this.expressApp.use('/api/thirdparty', thirdpartyRouter);
+    this.expressApp.use('/api/matches', matchesRouter);
 
     // 页面路由
     this.expressApp.get('/', (req, res) => {
@@ -86,6 +91,17 @@ class Application {
     // 创建 PID 文件
     this.createPidFile();
 
+    // 初始化数据库
+    logger.info('📦 初始化数据库连接...');
+    const dbConnected = await testConnection();
+    if (dbConnected) {
+      logger.info('✅ 数据库连接成功');
+      await initDatabase();
+      logger.info('✅ 数据库表初始化完成');
+    } else {
+      logger.warn('⚠️ 数据库连接失败，将使用 JSON 文件存储');
+    }
+
     // 加载账号配置
     const accounts = this.loadAccounts();
     if (accounts.length === 0) {
@@ -101,20 +117,33 @@ class Application {
     // 启动抓取器
     await this.scraperManager.startAll();
 
+    // 设置 ScraperManager 到路由
+    setScraperManager(this.scraperManager);
+
     // 启动第三方 API 抓取器
     this.startThirdPartyManager();
-
-    // 启动 WebSocket 服务器
-    const wsPort = parseInt(process.env.WS_PORT || '8080');
-    this.wsServer = new WSServer(wsPort, this.scraperManager);
 
     // 启动 HTTP 服务器（用于展示页面和 API）
     const httpPort = parseInt(process.env.HTTP_PORT || '10089');
     this.startHttpServer(httpPort);
 
+    // 启动 WebSocket 服务器（可选）
+    const enableWS = process.env.ENABLE_WEBSOCKET !== '0';
+    if (enableWS) {
+      const wsPort = parseInt(process.env.WS_PORT || '8080');
+      try {
+        this.wsServer = new WSServer(wsPort, this.scraperManager, this.thirdPartyManager);
+        logger.info(`📡 WebSocket 服务器: ws://localhost:${wsPort}`);
+      } catch (error: any) {
+        logger.warn(`⚠️ WebSocket 服务器启动失败 (端口 ${wsPort} 可能被占用): ${error.message}`);
+        logger.warn(`⚠️ 服务将继续运行，但 WebSocket 功能不可用`);
+      }
+    } else {
+      logger.info(`⚠️ WebSocket 服务器已禁用 (ENABLE_WEBSOCKET=0)`);
+    }
+
     logger.info('='.repeat(60));
     logger.info('✅ 服务启动成功');
-    logger.info(`📡 WebSocket 服务器: ws://localhost:${wsPort}`);
     logger.info(`🌐 HTTP 服务器: http://localhost:${httpPort}`);
     logger.info(`📄 页面:`);
     logger.info(`   - 皇冠赛事: http://localhost:${httpPort}/matches`);
@@ -141,8 +170,17 @@ class Application {
     // 设置到路由中
     setThirdPartyManager(this.thirdPartyManager);
 
-    // 启动定时抓取
-    this.thirdPartyManager.start();
+    // 先加载缓存，然后再启动定时抓取
+    this.thirdPartyManager.ensureCacheLoaded()
+      .then(() => {
+        // 启动定时抓取
+        this.thirdPartyManager!.start();
+      })
+      .catch(error => {
+        logger.warn(`[ThirdPartyManager] 预加载缓存失败: ${error.message}`);
+        // 即使加载失败也要启动定时抓取
+        this.thirdPartyManager!.start();
+      });
 
     logger.info(`🌍 第三方 API 抓取器已启动 (间隔: ${fetchInterval}秒)`);
   }
@@ -307,7 +345,11 @@ class Application {
         });
       }
 
-      // 5. 删除 PID 文件
+      // 5. 关闭数据库连接
+      logger.info('5️⃣ 关闭数据库连接...');
+      await closeDatabase();
+
+      // 6. 删除 PID 文件
       this.removePidFile();
 
       logger.info('✅ 服务已安全关闭');

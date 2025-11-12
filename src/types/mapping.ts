@@ -4,28 +4,9 @@
 
 export interface TeamMapping {
   id: string;
-  crown: {
-    team_home: string;
-    team_away: string;
-    league: string;
-  };
-  isports: {
-    team_home_cn: string;
-    team_home_en: string;
-    team_away_cn: string;
-    team_away_en: string;
-    league_cn: string;
-    league_en: string;
-  };
-  odds_api: {
-    team_home_cn: string;
-    team_home_en: string;
-    team_away_cn: string;
-    team_away_en: string;
-    league_cn: string;
-    league_en: string;
-  };
-  match_confidence: number; // 0-1 之间，匹配置信度
+  isports_en: string; // iSports 英文名
+  isports_cn: string; // iSports 中文名（简体）
+  crown_cn: string; // 皇冠中文名（简体）
   created_at: string;
   updated_at: string;
   verified: boolean; // 是否已人工验证

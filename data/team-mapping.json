@@ -1,4 +1,13 @@
 {
-  "mappings": []
+  "mappings": [
+    {
+      "isports_en": "Manchester United",
+      "isports_cn": "曼联",
+      "crown_cn": "曼联",
+      "verified": true,
+      "id": "61c6f871-1459-4d1f-8f8e-c6109289628b",
+      "created_at": "2025-11-11T17:30:45.305Z",
+      "updated_at": "2025-11-11T17:30:45.305Z"
+    }
+  ]
 }
-

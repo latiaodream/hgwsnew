@@ -20,11 +20,13 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@types/pg": "^8.15.6",
     "axios": "^1.6.0",
     "dotenv": "^16.3.1",
     "express": "^5.1.0",
     "https-proxy-agent": "^7.0.6",
     "ioredis": "^5.3.2",
+    "pg": "^8.16.3",
     "socks-proxy-agent": "^8.0.5",
     "uuid": "^13.0.0",
     "winston": "^3.11.0",

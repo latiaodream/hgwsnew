@@ -1,49 +1,58 @@
 /**
- * 球队名称映射管理器
+ * 联赛名称映射管理器
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { TeamMapping, TeamMappingData } from '../types/mapping';
+import { LeagueMapping, LeagueMappingData } from '../types/league-mapping';
 import logger from './logger';
-import { TeamMappingRepository } from '../repositories/TeamMappingRepository';
+import { LeagueMappingRepository } from '../repositories/LeagueMappingRepository';
 
-export class MappingManager {
+export class LeagueMappingManager {
   private mappingFilePath: string;
-  private mappings: Map<string, TeamMapping> = new Map();
-  private repository: TeamMappingRepository;
+  private mappings: Map<string, LeagueMapping> = new Map();
+  private repository: LeagueMappingRepository;
   private useDatabase: boolean;
 
   constructor(mappingFilePath?: string, useDatabase: boolean = true) {
-    this.mappingFilePath = mappingFilePath || path.join(process.cwd(), 'data', 'team-mapping.json');
+    this.mappingFilePath = mappingFilePath || path.join(process.cwd(), 'data', 'league-mapping.json');
     this.useDatabase = useDatabase;
-    this.repository = new TeamMappingRepository();
+    this.repository = new LeagueMappingRepository();
     this.loadMappings();
   }
 
   /**
    * 加载映射数据
    */
-  private loadMappings(): void {
+  private async loadMappings(): Promise<void> {
     try {
-      if (!fs.existsSync(this.mappingFilePath)) {
-        logger.warn(`[MappingManager] 映射文件不存在: ${this.mappingFilePath}`);
-        this.saveMappings();
-        return;
+      if (this.useDatabase) {
+        const mappings = await this.repository.findAll();
+        this.mappings.clear();
+        mappings.forEach(mapping => {
+          this.mappings.set(mapping.id, mapping);
+        });
+        logger.info(`[LeagueMappingManager] 从数据库加载 ${this.mappings.size} 条联赛映射`);
+      } else {
+        if (!fs.existsSync(this.mappingFilePath)) {
+          logger.warn(`[LeagueMappingManager] 映射文件不存在: ${this.mappingFilePath}`);
+          this.saveMappings();
+          return;
+        }
+
+        const data = fs.readFileSync(this.mappingFilePath, 'utf-8');
+        const mappingData: LeagueMappingData = JSON.parse(data);
+
+        this.mappings.clear();
+        mappingData.mappings.forEach(mapping => {
+          this.mappings.set(mapping.id, mapping);
+        });
+
+        logger.info(`[LeagueMappingManager] 从文件加载 ${this.mappings.size} 条联赛映射`);
       }
-
-      const data = fs.readFileSync(this.mappingFilePath, 'utf-8');
-      const mappingData: TeamMappingData = JSON.parse(data);
-
-      this.mappings.clear();
-      mappingData.mappings.forEach(mapping => {
-        this.mappings.set(mapping.id, mapping);
-      });
-
-      logger.info(`[MappingManager] 加载 ${this.mappings.size} 条映射`);
     } catch (error: any) {
-      logger.error('[MappingManager] 加载映射失败:', error.message);
+      logger.error('[LeagueMappingManager] 加载映射失败:', error.message);
     }
   }
 
@@ -53,8 +62,7 @@ export class MappingManager {
   private async saveMappings(): Promise<void> {
     try {
       if (!this.useDatabase) {
-        // 保存到 JSON 文件
-        const mappingData: TeamMappingData = {
+        const mappingData: LeagueMappingData = {
           mappings: Array.from(this.mappings.values()),
         };
 
@@ -64,21 +72,19 @@ export class MappingManager {
         }
 
         fs.writeFileSync(this.mappingFilePath, JSON.stringify(mappingData, null, 2), 'utf-8');
-        logger.info(`[MappingManager] 保存 ${this.mappings.size} 条映射到文件`);
+        logger.info(`[LeagueMappingManager] 保存 ${this.mappings.size} 条联赛映射到文件`);
       }
-      // 如果使用数据库，不需要手动保存，因为每个操作都会直接写入数据库
     } catch (error: any) {
-      logger.error('[MappingManager] 保存映射失败:', error.message);
+      logger.error('[LeagueMappingManager] 保存映射失败:', error.message);
     }
   }
 
   /**
    * 获取所有映射
    */
-  async getAllMappings(): Promise<TeamMapping[]> {
+  async getAllMappings(): Promise<LeagueMapping[]> {
     if (this.useDatabase) {
-      const mappings = await this.repository.findAll();
-      return mappings;
+      return await this.repository.findAll();
     }
     return Array.from(this.mappings.values());
   }
@@ -86,7 +92,7 @@ export class MappingManager {
   /**
    * 根据 ID 获取映射
    */
-  async getMappingById(id: string): Promise<TeamMapping | undefined> {
+  async getMappingById(id: string): Promise<LeagueMapping | undefined> {
     if (this.useDatabase) {
       const mapping = await this.repository.findById(id);
       return mapping || undefined;
@@ -95,10 +101,37 @@ export class MappingManager {
   }
 
   /**
+   * 根据 iSports 英文名查找映射
+   */
+  findByISportsEn(isportsEn: string): LeagueMapping | undefined {
+    return Array.from(this.mappings.values()).find(
+      m => m.isports_en.toLowerCase() === isportsEn.toLowerCase()
+    );
+  }
+
+  /**
+   * 根据 iSports 中文名查找映射
+   */
+  findByISportsCn(isportsCn: string): LeagueMapping | undefined {
+    return Array.from(this.mappings.values()).find(
+      m => m.isports_cn.toLowerCase() === isportsCn.toLowerCase()
+    );
+  }
+
+  /**
+   * 根据皇冠中文名查找映射
+   */
+  findByCrownCn(crownCn: string): LeagueMapping | undefined {
+    return Array.from(this.mappings.values()).find(
+      m => m.crown_cn.toLowerCase() === crownCn.toLowerCase()
+    );
+  }
+
+  /**
    * 创建新映射
    */
-  async createMapping(mapping: Omit<TeamMapping, 'id' | 'created_at' | 'updated_at'>): Promise<TeamMapping> {
-    const newMapping: TeamMapping = {
+  async createMapping(mapping: Omit<LeagueMapping, 'id' | 'created_at' | 'updated_at'>): Promise<LeagueMapping> {
+    const newMapping: LeagueMapping = {
       ...mapping,
       id: uuidv4(),
       created_at: new Date().toISOString(),
@@ -108,12 +141,12 @@ export class MappingManager {
     if (this.useDatabase) {
       const created = await this.repository.create(newMapping);
       this.mappings.set(created.id, created);
-      logger.info(`[MappingManager] 创建映射到数据库: ${created.id}`);
+      logger.info(`[LeagueMappingManager] 创建映射到数据库: ${created.id}`);
       return created;
     } else {
       this.mappings.set(newMapping.id, newMapping);
       await this.saveMappings();
-      logger.info(`[MappingManager] 创建映射到文件: ${newMapping.id}`);
+      logger.info(`[LeagueMappingManager] 创建映射到文件: ${newMapping.id}`);
       return newMapping;
     }
   }
@@ -121,24 +154,24 @@ export class MappingManager {
   /**
    * 更新映射
    */
-  async updateMapping(id: string, updates: Partial<Omit<TeamMapping, 'id' | 'created_at'>>): Promise<TeamMapping | null> {
+  async updateMapping(id: string, updates: Partial<Omit<LeagueMapping, 'id' | 'created_at'>>): Promise<LeagueMapping | null> {
     if (this.useDatabase) {
       const updated = await this.repository.update(id, updates);
       if (updated) {
         this.mappings.set(id, updated);
-        logger.info(`[MappingManager] 更新映射到数据库: ${id}`);
+        logger.info(`[LeagueMappingManager] 更新映射到数据库: ${id}`);
       } else {
-        logger.warn(`[MappingManager] 映射不存在: ${id}`);
+        logger.warn(`[LeagueMappingManager] 映射不存在: ${id}`);
       }
       return updated;
     } else {
       const existing = this.mappings.get(id);
       if (!existing) {
-        logger.warn(`[MappingManager] 映射不存在: ${id}`);
+        logger.warn(`[LeagueMappingManager] 映射不存在: ${id}`);
         return null;
       }
 
-      const updated: TeamMapping = {
+      const updated: LeagueMapping = {
         ...existing,
         ...updates,
         id: existing.id,
@@ -149,7 +182,7 @@ export class MappingManager {
       this.mappings.set(id, updated);
       await this.saveMappings();
 
-      logger.info(`[MappingManager] 更新映射到文件: ${id}`);
+      logger.info(`[LeagueMappingManager] 更新映射到文件: ${id}`);
       return updated;
     }
   }
@@ -162,18 +195,18 @@ export class MappingManager {
       const deleted = await this.repository.delete(id);
       if (deleted) {
         this.mappings.delete(id);
-        logger.info(`[MappingManager] 从数据库删除映射: ${id}`);
+        logger.info(`[LeagueMappingManager] 从数据库删除映射: ${id}`);
       } else {
-        logger.warn(`[MappingManager] 映射不存在: ${id}`);
+        logger.warn(`[LeagueMappingManager] 映射不存在: ${id}`);
       }
       return deleted;
     } else {
       const deleted = this.mappings.delete(id);
       if (deleted) {
         await this.saveMappings();
-        logger.info(`[MappingManager] 从文件删除映射: ${id}`);
+        logger.info(`[LeagueMappingManager] 从文件删除映射: ${id}`);
       } else {
-        logger.warn(`[MappingManager] 映射不存在: ${id}`);
+        logger.warn(`[LeagueMappingManager] 映射不存在: ${id}`);
       }
       return deleted;
     }
@@ -182,11 +215,11 @@ export class MappingManager {
   /**
    * 批量导入映射
    */
-  async importMappings(mappings: Omit<TeamMapping, 'id' | 'created_at' | 'updated_at'>[]): Promise<TeamMapping[]> {
-    const imported: TeamMapping[] = [];
+  async importMappings(mappings: Omit<LeagueMapping, 'id' | 'created_at' | 'updated_at'>[]): Promise<LeagueMapping[]> {
+    const imported: LeagueMapping[] = [];
 
     if (this.useDatabase) {
-      const fullMappings: TeamMapping[] = mappings.map(m => ({
+      const fullMappings: LeagueMapping[] = mappings.map(m => ({
         ...m,
         id: uuidv4(),
         created_at: new Date().toISOString(),
@@ -195,7 +228,7 @@ export class MappingManager {
 
       await this.repository.createBatch(fullMappings);
       fullMappings.forEach(m => this.mappings.set(m.id, m));
-      logger.info(`[MappingManager] 批量导入 ${fullMappings.length} 条映射到数据库`);
+      logger.info(`[LeagueMappingManager] 批量导入 ${fullMappings.length} 条联赛映射到数据库`);
       return fullMappings;
     } else {
       for (const mapping of mappings) {
@@ -203,7 +236,7 @@ export class MappingManager {
         imported.push(newMapping);
       }
 
-      logger.info(`[MappingManager] 批量导入 ${imported.length} 条映射到文件`);
+      logger.info(`[LeagueMappingManager] 批量导入 ${imported.length} 条联赛映射到文件`);
       return imported;
     }
   }
@@ -211,14 +244,14 @@ export class MappingManager {
   /**
    * 验证映射
    */
-  async verifyMapping(id: string): Promise<TeamMapping | null> {
+  async verifyMapping(id: string): Promise<LeagueMapping | null> {
     return this.updateMapping(id, { verified: true });
   }
 
   /**
    * 搜索映射
    */
-  async searchMappings(query: string): Promise<TeamMapping[]> {
+  async searchMappings(query: string): Promise<LeagueMapping[]> {
     if (this.useDatabase) {
       return await this.repository.search(query);
     } else {
@@ -236,7 +269,7 @@ export class MappingManager {
   /**
    * 按验证状态筛选
    */
-  async filterByVerified(verified: boolean): Promise<TeamMapping[]> {
+  async filterByVerified(verified: boolean): Promise<LeagueMapping[]> {
     if (this.useDatabase) {
       return await this.repository.findByVerified(verified);
     } else {

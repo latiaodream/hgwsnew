@@ -21,25 +21,29 @@ export interface ISportsMatch {
   team_away_cn: string;
   team_away_en: string;
   match_time: string;
-  status: 'live' | 'today' | 'tomorrow';
+  status: 'live' | 'today' | 'early';
   score_home?: number;
   score_away?: number;
   odds: {
-    handicap?: {
+    // 支持多盘口：handicapIndex=1 是主盘，其他是备选盘
+    handicap?: Array<{
       home_odds: number;
       away_odds: number;
       handicap_line: number;
-    };
+      handicap_index: number; // 1=主盘，2+=备选盘
+    }>;
     moneyline?: {
       home_odds: number;
       draw_odds: number;
       away_odds: number;
     };
-    totals?: {
+    // 支持多盘口：handicapIndex=1 是主盘，其他是备选盘
+    totals?: Array<{
       over_odds: number;
       under_odds: number;
       total_line: number;
-    };
+      handicap_index: number; // 1=主盘，2+=备选盘
+    }>;
   };
   last_update: string;
 }
@@ -69,21 +73,37 @@ export class ISportsAPIScraper {
    */
   async fetchAllMatches(): Promise<ISportsMatch[]> {
     try {
-      const [liveMatches, todayMatches, tomorrowMatches] = await Promise.all([
-        this.fetchLiveMatches(),
-        this.fetchTodayMatches(),
-        this.fetchTomorrowMatches(),
-      ]);
+      // 获取所有赛事（已经在 fetchOddsMatches 中分类）
+      const allMatches = await this.fetchOddsMatches();
 
-      const allMatches = [...liveMatches, ...todayMatches, ...tomorrowMatches];
-      
+      if (allMatches.length === 0) {
+        const cached = this.getAllMatches();
+        logger.warn(
+          `[ISportsAPI] 本次抓取返回 0 场赛事，保留旧缓存 ${cached.length} 场`
+        );
+        return cached;
+      }
+
+      logger.info(`[ISportsAPI] fetchOddsMatches 返回 ${allMatches.length} 场赛事`);
+      logger.info(`[ISportsAPI] 更新缓存前 matchesCache.size = ${this.matchesCache.size}`);
+
+      // 清空旧缓存
+      this.matchesCache.clear();
+
       // 更新缓存
       allMatches.forEach(match => {
         this.matchesCache.set(match.match_id, match);
       });
 
-      logger.info(`[ISportsAPI] 抓取完成: 滚球 ${liveMatches.length}, 今日 ${todayMatches.length}, 明日 ${tomorrowMatches.length}`);
-      
+      logger.info(`[ISportsAPI] 更新缓存后 matchesCache.size = ${this.matchesCache.size}`);
+
+      // 统计各类型赛事数量
+      const liveCount = allMatches.filter(m => m.status === 'live').length;
+      const todayCount = allMatches.filter(m => m.status === 'today').length;
+      const earlyCount = allMatches.filter(m => m.status === 'early').length;
+
+      logger.info(`[ISportsAPI] 抓取完成: 滚球 ${liveCount}, 今日 ${todayCount}, 早盘 ${earlyCount}`);
+
       return allMatches;
     } catch (error: any) {
       logger.error('[ISportsAPI] 抓取失败:', error.message);
@@ -95,178 +115,276 @@ export class ISportsAPIScraper {
    * 获取滚球赛事
    */
   async fetchLiveMatches(): Promise<ISportsMatch[]> {
-    try {
-      // API 文档: https://www.isportsapi.com/docs.html?id=223&lang=en
-      // 获取滚球赛事列表
-      const response = await this.client.get('/football/schedule/live', {
-        params: {
-          token: this.apiKey,
-          company_id: this.crownCompanyId,
-        },
-      });
-
-      if (response.data.code !== 200) {
-        throw new Error(`API 返回错误: ${response.data.msg}`);
-      }
-
-      const matches = this.parseMatches(response.data.data || [], 'live');
-      logger.info(`[ISportsAPI] 滚球赛事: ${matches.length} 场`);
-      
-      return matches;
-    } catch (error: any) {
-      logger.error('[ISportsAPI] 获取滚球赛事失败:', error.message);
-      return [];
-    }
+    const allMatches = this.getAllMatches();
+    return allMatches.filter(m => m.status === 'live');
   }
 
   /**
    * 获取今日赛事
    */
   async fetchTodayMatches(): Promise<ISportsMatch[]> {
-    try {
-      const today = this.getDateString(0);
-      const response = await this.client.get('/football/schedule/date', {
-        params: {
-          token: this.apiKey,
-          company_id: this.crownCompanyId,
-          date: today,
-        },
-      });
-
-      if (response.data.code !== 200) {
-        throw new Error(`API 返回错误: ${response.data.msg}`);
-      }
-
-      const matches = this.parseMatches(response.data.data || [], 'today');
-      logger.info(`[ISportsAPI] 今日赛事: ${matches.length} 场`);
-      
-      return matches;
-    } catch (error: any) {
-      logger.error('[ISportsAPI] 获取今日赛事失败:', error.message);
-      return [];
-    }
+    const allMatches = this.getAllMatches();
+    return allMatches.filter(m => m.status === 'today');
   }
 
   /**
-   * 获取明日赛事
+   * 获取早盘赛事
    */
   async fetchTomorrowMatches(): Promise<ISportsMatch[]> {
+    const allMatches = this.getAllMatches();
+    return allMatches.filter(m => m.status === 'early');
+  }
+
+  /**
+   * 获取皇冠赔率数据并匹配赛事详情
+   */
+  private async fetchOddsMatches(): Promise<ISportsMatch[]> {
     try {
-      const tomorrow = this.getDateString(1);
-      const response = await this.client.get('/football/schedule/date', {
+      // 1. 获取所有皇冠赔率数据
+      const response = await this.client.get('/football/odds/main', {
         params: {
-          token: this.apiKey,
-          company_id: this.crownCompanyId,
-          date: tomorrow,
+          api_key: this.apiKey,
+          companyId: this.crownCompanyId, // 皇冠 Company ID = 3
         },
       });
 
-      if (response.data.code !== 200) {
-        throw new Error(`API 返回错误: ${response.data.msg}`);
+      if (response.data.code !== 0) {
+        logger.error(`[ISportsAPI] 赔率API返回错误: ${JSON.stringify(response.data)}`);
+        return [];
       }
 
-      const matches = this.parseMatches(response.data.data || [], 'tomorrow');
-      logger.info(`[ISportsAPI] 明日赛事: ${matches.length} 场`);
-      
+      const data = response.data.data || {};
+
+      // 2. 解析赔率数据，获取所有 matchId
+      const matchesMap = this.parseOddsDataToMap(data);
+      const matchIds = Array.from(matchesMap.keys());
+
+      if (matchIds.length === 0) {
+        logger.info(`[ISportsAPI] 没有皇冠赔率数据`);
+        return [];
+      }
+
+      logger.info(`[ISportsAPI] 皇冠赔率赛事: ${matchIds.length} 场`);
+
+      // 3. 批量获取赛事详情（每次最多100个）
+      const matches: ISportsMatch[] = [];
+      const batchSize = 100;
+
+      for (let i = 0; i < matchIds.length; i += batchSize) {
+        const batchIds = matchIds.slice(i, i + batchSize);
+        const matchDetails = await this.fetchMatchDetails(batchIds);
+
+        // 4. 合并赔率数据和赛事详情
+        for (const detail of matchDetails) {
+          const match = matchesMap.get(detail.matchId);
+          if (match) {
+            match.league_id = detail.leagueId;
+            match.league_name_cn = detail.leagueName;
+            match.league_name_en = detail.leagueName;
+            match.team_home_cn = detail.homeName;
+            match.team_home_en = detail.homeName;
+            match.team_away_cn = detail.awayName;
+            match.team_away_en = detail.awayName;
+
+            // iSportsAPI 返回的时间戳是 UTC 时间，我们需要将其解释为 GMT-4（美东时间）
+            // 方法：将 UTC 时间戳直接构造为 GMT-4 的 ISO 字符串
+            const matchTimeMs = detail.matchTime * 1000;
+            const matchDate = new Date(matchTimeMs);
+
+            // 构造 GMT-4 时间字符串（格式：YYYY-MM-DDTHH:mm:ss-04:00）
+            const year = matchDate.getUTCFullYear();
+            const month = String(matchDate.getUTCMonth() + 1).padStart(2, '0');
+            const day = String(matchDate.getUTCDate()).padStart(2, '0');
+            const hour = String(matchDate.getUTCHours()).padStart(2, '0');
+            const minute = String(matchDate.getUTCMinutes()).padStart(2, '0');
+            const second = String(matchDate.getUTCSeconds()).padStart(2, '0');
+
+            match.match_time = `${year}-${month}-${day}T${hour}:${minute}:${second}-04:00`;
+
+            // 根据比赛时间和状态判断类型（使用 GMT-4 时间）
+            const now = new Date();
+            const nowGMT4 = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+            const matchTimeGMT4 = new Date(matchDate.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+            const todayEndGMT4 = new Date(nowGMT4);
+            todayEndGMT4.setHours(23, 59, 59, 999);
+
+            // 计算比赛开始时间与当前时间的差值（分钟）
+            const timeDiffMinutes = (matchTimeGMT4.getTime() - nowGMT4.getTime()) / (1000 * 60);
+
+            if (detail.status > 0 && timeDiffMinutes <= 15) {
+              // status > 0 且比赛时间已到（或提前15分钟内）才标记为滚球
+              // 这样可以避免 API 数据错误导致未开始的比赛被标记为滚球
+              match.status = 'live';
+            } else if (matchTimeGMT4 <= todayEndGMT4) {
+              match.status = 'today';
+            } else {
+              // 明日及以后的赛事都归为早盘
+              match.status = 'early';
+            }
+
+            matches.push(match);
+          }
+        }
+
+        // API 限制：10秒/调用，这里等待一下
+        if (i + batchSize < matchIds.length) {
+          await new Promise(resolve => setTimeout(resolve, 10000));
+        }
+      }
+
       return matches;
     } catch (error: any) {
-      logger.error('[ISportsAPI] 获取明日赛事失败:', error.message);
+      logger.error(`[ISportsAPI] 获取赔率数据失败: ${error.message}`);
       return [];
     }
   }
 
   /**
-   * 解析赛事数据
+   * 批量获取赛事详情
+   * API 文档: https://www.isportsapi.com/docs.html?id=72&lang=en
    */
-  private parseMatches(data: any[], status: 'live' | 'today' | 'tomorrow'): ISportsMatch[] {
-    const matches: ISportsMatch[] = [];
+  private async fetchMatchDetails(matchIds: string[]): Promise<any[]> {
+    try {
+      const response = await this.client.get('/football/schedule/basic', {
+        params: {
+          api_key: this.apiKey,
+          matchId: matchIds.join(','),
+        },
+      });
 
-    for (const item of data) {
-      try {
-        const match: ISportsMatch = {
-          match_id: String(item.id || item.match_id),
-          league_id: String(item.league_id),
-          league_name_cn: item.league_name_cn || item.league_name || '',
-          league_name_en: item.league_name_en || item.league_name || '',
-          team_home_cn: item.home_team_cn || item.home_team || '',
-          team_home_en: item.home_team_en || item.home_team || '',
-          team_away_cn: item.away_team_cn || item.away_team || '',
-          team_away_en: item.away_team_en || item.away_team || '',
-          match_time: item.match_time || item.time || '',
-          status,
-          score_home: item.score_home,
-          score_away: item.score_away,
-          odds: this.parseOdds(item.odds || item),
-          last_update: new Date().toISOString(),
-        };
+      if (response.data.code !== 0) {
+        logger.warn(`[ISportsAPI] 获取赛事详情失败: ${response.data.message}`);
+        return [];
+      }
 
-        matches.push(match);
-      } catch (error: any) {
-        logger.warn(`[ISportsAPI] 解析赛事失败: ${error.message}`);
+      return response.data.data || [];
+    } catch (error: any) {
+      logger.error(`[ISportsAPI] 获取赛事详情异常: ${error.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * 解析赔率数据，返回 Map
+   * 数据格式: handicap, europeOdds, overUnder, handicapHalf, overUnderHalf
+   * 每个数组包含字符串，格式: "matchId,companyId,line,homeOdds,awayOdds,...,handicapIndex,..."
+   */
+  private parseOddsDataToMap(data: any): Map<string, ISportsMatch> {
+    const matchesMap = new Map<string, ISportsMatch>();
+
+    // 解析让球盘（亚洲盘）- 支持多盘口
+    if (data.handicap && Array.isArray(data.handicap)) {
+      for (const oddsStr of data.handicap) {
+        const parts = oddsStr.split(',');
+        if (parts.length < 11) continue;
+
+        const matchId = parts[0];
+        const handicapLine = parseFloat(parts[2]);
+        const homeOdds = parseFloat(parts[3]);
+        const awayOdds = parseFloat(parts[4]);
+        const handicapIndex = parseInt(parts[7]) || 1; // handicapIndex 在第8个位置
+
+        if (!matchesMap.has(matchId)) {
+          matchesMap.set(matchId, this.createEmptyMatch(matchId));
+        }
+
+        const match = matchesMap.get(matchId)!;
+        if (!match.odds.handicap) {
+          match.odds.handicap = [];
+        }
+
+        // 添加到数组中，按 handicapIndex 排序（主盘在前）
+        match.odds.handicap.push({
+          handicap_line: handicapLine,
+          home_odds: homeOdds,
+          away_odds: awayOdds,
+          handicap_index: handicapIndex,
+        });
+
+        // 排序：主盘(index=1)在前
+        match.odds.handicap.sort((a, b) => a.handicap_index - b.handicap_index);
       }
     }
 
-    return matches;
+    // 解析大小球 - 支持多盘口
+    if (data.overUnder && Array.isArray(data.overUnder)) {
+      for (const oddsStr of data.overUnder) {
+        const parts = oddsStr.split(',');
+        if (parts.length < 11) continue;
+
+        const matchId = parts[0];
+        const totalLine = parseFloat(parts[2]);
+        const overOdds = parseFloat(parts[3]);
+        const underOdds = parseFloat(parts[4]);
+        const handicapIndex = parseInt(parts[5]) || 1; // handicapIndex 在第6个位置
+
+        if (!matchesMap.has(matchId)) {
+          matchesMap.set(matchId, this.createEmptyMatch(matchId));
+        }
+
+        const match = matchesMap.get(matchId)!;
+        if (!match.odds.totals) {
+          match.odds.totals = [];
+        }
+
+        // 添加到数组中，按 handicapIndex 排序（主盘在前）
+        match.odds.totals.push({
+          total_line: totalLine,
+          over_odds: overOdds,
+          under_odds: underOdds,
+          handicap_index: handicapIndex,
+        });
+
+        // 排序：主盘(index=1)在前
+        match.odds.totals.sort((a, b) => a.handicap_index - b.handicap_index);
+      }
+    }
+
+    // 解析欧洲盘（1x2）
+    if (data.europeOdds && Array.isArray(data.europeOdds)) {
+      for (const oddsStr of data.europeOdds) {
+        const parts = oddsStr.split(',');
+        if (parts.length < 9) continue;
+
+        const matchId = parts[0];
+        const homeOdds = parseFloat(parts[2]);
+        const drawOdds = parseFloat(parts[3]);
+        const awayOdds = parseFloat(parts[4]);
+
+        if (!matchesMap.has(matchId)) {
+          matchesMap.set(matchId, this.createEmptyMatch(matchId));
+        }
+
+        const match = matchesMap.get(matchId)!;
+        match.odds.moneyline = {
+          home_odds: homeOdds,
+          draw_odds: drawOdds,
+          away_odds: awayOdds,
+        };
+      }
+    }
+
+    return matchesMap;
   }
 
   /**
-   * 解析赔率数据
+   * 创建空的赛事对象
    */
-  private parseOdds(oddsData: any): ISportsMatch['odds'] {
-    const odds: ISportsMatch['odds'] = {};
-
-    // 让球盘 (Handicap / Asian Handicap)
-    if (oddsData.handicap || oddsData.ah) {
-      const hc = oddsData.handicap || oddsData.ah;
-      odds.handicap = {
-        home_odds: parseFloat(hc.home_odds || hc.home || 0),
-        away_odds: parseFloat(hc.away_odds || hc.away || 0),
-        handicap_line: parseFloat(hc.handicap || hc.line || 0),
-      };
-    }
-
-    // 独赢盘 (Moneyline / 1X2)
-    if (oddsData.moneyline || oddsData.ml || oddsData['1x2']) {
-      const ml = oddsData.moneyline || oddsData.ml || oddsData['1x2'];
-      odds.moneyline = {
-        home_odds: parseFloat(ml.home_odds || ml.home || ml['1'] || 0),
-        draw_odds: parseFloat(ml.draw_odds || ml.draw || ml.x || 0),
-        away_odds: parseFloat(ml.away_odds || ml.away || ml['2'] || 0),
-      };
-    }
-
-    // 大小球 (Totals / Over/Under)
-    if (oddsData.totals || oddsData.ou) {
-      const ou = oddsData.totals || oddsData.ou;
-      odds.totals = {
-        over_odds: parseFloat(ou.over_odds || ou.over || 0),
-        under_odds: parseFloat(ou.under_odds || ou.under || 0),
-        total_line: parseFloat(ou.total || ou.line || 0),
-      };
-    }
-
-    return odds;
-  }
-
-  /**
-   * 获取日期字符串 (YYYYMMDD)
-   */
-  private getDateString(daysOffset: number): string {
-    const date = new Date();
-    date.setDate(date.getDate() + daysOffset);
-    
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    
-    return `${year}${month}${day}`;
-  }
-
-  /**
-   * 获取缓存的赛事
-   */
-  getMatchesCache(): ISportsMatch[] {
-    return Array.from(this.matchesCache.values());
+  private createEmptyMatch(matchId: string): ISportsMatch {
+    return {
+      match_id: matchId,
+      league_id: '',
+      league_name_cn: '未知联赛',
+      league_name_en: 'Unknown League',
+      team_home_cn: '主队',
+      team_home_en: 'Home Team',
+      team_away_cn: '客队',
+      team_away_en: 'Away Team',
+      match_time: new Date().toISOString(),
+      status: 'live',
+      odds: {},
+      last_update: new Date().toISOString(),
+    };
   }
 
   /**
@@ -275,5 +393,29 @@ export class ISportsAPIScraper {
   getMatchById(matchId: string): ISportsMatch | undefined {
     return this.matchesCache.get(matchId);
   }
-}
 
+  /**
+   * 将外部缓存的数据写入本地缓存
+   */
+  hydrateCache(matches: ISportsMatch[]): void {
+    this.matchesCache.clear();
+    matches.forEach(match => {
+      if (match?.match_id) {
+        this.matchesCache.set(match.match_id, match);
+      }
+    });
+
+    logger.info(`[ISportsAPI] hydrateCache(): 恢复 ${matches.length} 场赛事`);
+  }
+
+  /**
+   * 获取所有缓存的赛事
+   */
+  getAllMatches(): ISportsMatch[] {
+    logger.info(`[ISportsAPI] getAllMatches() 被调用`);
+    logger.info(`[ISportsAPI] matchesCache.size = ${this.matchesCache.size}`);
+    const matches = Array.from(this.matchesCache.values());
+    logger.info(`[ISportsAPI] getAllMatches() 返回 ${matches.length} 场赛事`);
+    return matches;
+  }
+}

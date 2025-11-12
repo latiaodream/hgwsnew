@@ -885,16 +885,20 @@ export class CrownScraper {
 
       for (const game of games) {
         try {
+          const gid = game.GID || game.gid;
+          const matchTime = this.parseMatchTime(game.DATETIME || game.datetime);
+
           const match: Match = {
-            gid: game.GID || game.gid,
+            gid,
             lid: league.LID || league.lid || game.LID || game.lid,
             home: game.TEAM_H || game.team_h || '',
             home_zh: game.TEAM_H || game.team_h || '',
             away: game.TEAM_C || game.team_c || '',
             away_zh: game.TEAM_C || game.team_c || '',
-            league: league.LEAGUE || league.league || '',
-            league_zh: league.LEAGUE || league.league || '',
-            match_time: this.parseMatchTime(game.DATETIME || game.datetime),
+            league: game.LEAGUE || game.league || '',
+            league_zh: game.LEAGUE || game.league || '',
+            match_time: matchTime,
+            live_status: this.parseLiveStatus(game),
             state: this.parseState(game),
             home_score: this.parseScore(game.SCORE_H || game.score_h),
             away_score: this.parseScore(game.SCORE_C || game.score_c),
@@ -903,7 +907,6 @@ export class CrownScraper {
               league,
               game,
             },
-            markets: this.parseOdds(game),
           };
 
           matches.push(match);
@@ -917,21 +920,60 @@ export class CrownScraper {
   }
 
   /**
-   * 解析比赛时间
+   * 解析比赛时间（转换为 UTC-4 时区）
    */
   private parseMatchTime(datetime: string): string {
-    if (!datetime) return new Date().toISOString();
+    if (!datetime) {
+      // 返回当前 GMT-4 时间
+      const now = new Date();
+      const year = now.getUTCFullYear();
+      const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(now.getUTCDate()).padStart(2, '0');
+      const hour = String(now.getUTCHours()).padStart(2, '0');
+      const minute = String(now.getUTCMinutes()).padStart(2, '0');
+      const second = String(now.getUTCSeconds()).padStart(2, '0');
+      return `${year}-${month}-${day}T${hour}:${minute}:${second}-04:00`;
+    }
 
     try {
-      // 格式：11-09<br>23:15
-      const cleaned = datetime.replace(/<br>/g, ' ');
-      const [date, time] = cleaned.split(' ');
+      // 格式：11-11 03:00p 或 11-11 11:00a
+      const cleaned = datetime.replace(/<br>/g, ' ').trim();
+      let [date, timeStr] = cleaned.split(/\s+/);
+
+      if (!date || !timeStr) {
+        throw new Error('Invalid datetime format');
+      }
+
+      // 检查 AM/PM 标记
+      const isPM = timeStr.endsWith('p');
+      const isAM = timeStr.endsWith('a');
+      timeStr = timeStr.replace(/[ap]$/i, ''); // 移除 a/p 后缀
+
       const [month, day] = date.split('-');
+      const [hourStr, minute] = timeStr.split(':');
+      let hour = parseInt(hourStr);
+
+      // 处理 PM 时间（12小时制转24小时制）
+      if (isPM && hour < 12) {
+        hour += 12;
+      } else if (isAM && hour === 12) {
+        hour = 0;
+      }
+
       const year = new Date().getFullYear();
 
-      return new Date(`${year}-${month}-${day} ${time}`).toISOString();
+      // 皇冠时间是美东时间（GMT-4），直接返回 GMT-4 格式的 ISO 字符串
+      return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:${minute}:00-04:00`;
     } catch (error) {
-      return new Date().toISOString();
+      logger.warn(`[${this.account.showType}] 解析时间失败: ${datetime}`, error);
+      const now = new Date();
+      const year = now.getUTCFullYear();
+      const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(now.getUTCDate()).padStart(2, '0');
+      const hour = String(now.getUTCHours()).padStart(2, '0');
+      const minute = String(now.getUTCMinutes()).padStart(2, '0');
+      const second = String(now.getUTCSeconds()).padStart(2, '0');
+      return `${year}-${month}-${day}T${hour}:${minute}:${second}-04:00`;
     }
   }
 
@@ -1367,9 +1409,11 @@ export class CrownScraper {
         );
         return; // 直接返回，不暂停账号
       case 'double_login':
-        duration = 10 * 60 * 1000;
-        reason = '疑似重复登录';
-        break;
+        // 忽略重复登录警告，这是我们自己的保护机制，不是服务器限制
+        logger.debug(
+          `[${this.account.showType}] 检测到重复登录提示 (${context})，忽略并继续运行`
+        );
+        return; // 直接返回，不暂停账号
       case 'html_block':
         duration = 5 * 60 * 1000;
         reason = '返回非预期页面';
@@ -1380,6 +1424,37 @@ export class CrownScraper {
       `[${this.account.showType}] ${reason} (${context})，暂停抓取 ${Math.ceil(duration / 60000)} 分钟`
     );
     this.suspendAccount(duration, `${reason} @ ${context}`);
+  }
+
+  /**
+   * 解析滚球实时状态（如 "2H^82:14" 或 "HT"）
+   */
+  private parseLiveStatus(game: any): string | undefined {
+    // 只有滚球才有实时状态
+    if (this.account.showType !== 'live') {
+      return undefined;
+    }
+
+    // NOW_MODEL 字段表示当前状态
+    // HT: 中场休息, 1H: 上半场, 2H: 下半场
+    const nowModel = game.NOW_MODEL || game.now_model;
+    if (nowModel) {
+      // 如果是中场休息，直接返回 HT
+      if (nowModel === 'HT') {
+        return 'HT';
+      }
+
+      // 如果有 RETIMESET 字段，表示比赛时间
+      const timer = game.RETIMESET || game.retimeset || '';
+      if (timer && timer !== '0') {
+        // 格式化为 "1H^45:00" 或 "2H^82:14"
+        return `${nowModel}^${timer}`;
+      }
+
+      return nowModel;
+    }
+
+    return undefined;
   }
 
   /**

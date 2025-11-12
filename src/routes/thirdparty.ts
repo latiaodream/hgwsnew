@@ -15,7 +15,9 @@ let thirdPartyManager: ThirdPartyManager | null = null;
  * 设置 ThirdPartyManager 实例
  */
 export function setThirdPartyManager(manager: ThirdPartyManager) {
+  logger.info(`[Routes] setThirdPartyManager 被调用，manager 是否存在: ${!!manager}`);
   thirdPartyManager = manager;
+  logger.info(`[Routes] thirdPartyManager 已设置，是否存在: ${!!thirdPartyManager}`);
 }
 
 /**
@@ -24,12 +26,17 @@ export function setThirdPartyManager(manager: ThirdPartyManager) {
  */
 router.get('/isports', async (req: Request, res: Response) => {
   try {
+    logger.info(`[API] 收到 /api/thirdparty/isports 请求`);
+    logger.info(`[API] thirdPartyManager 是否存在: ${!!thirdPartyManager}`);
+
     if (!thirdPartyManager) {
       return res.status(503).json({
         success: false,
         error: '第三方服务未初始化',
       });
     }
+
+    await thirdPartyManager.ensureCacheLoaded();
 
     const { status, refresh } = req.query;
 
@@ -39,10 +46,12 @@ router.get('/isports', async (req: Request, res: Response) => {
     }
 
     let matches = thirdPartyManager.getISportsCachedData();
+    logger.info(`[API] getISportsCachedData() 返回 ${matches.length} 场赛事`);
 
     // 按状态筛选
     if (status && typeof status === 'string') {
       matches = matches.filter(m => m.status === status);
+      logger.info(`[API] 筛选 status=${status} 后剩余 ${matches.length} 场赛事`);
     }
 
     res.json({
@@ -72,6 +81,8 @@ router.get('/odds-api', async (req: Request, res: Response) => {
         error: '第三方服务未初始化',
       });
     }
+
+    await thirdPartyManager.ensureCacheLoaded();
 
     const { status, refresh } = req.query;
 
@@ -115,6 +126,8 @@ router.get('/all', async (req: Request, res: Response) => {
       });
     }
 
+    await thirdPartyManager.ensureCacheLoaded();
+
     const { refresh } = req.query;
 
     // 如果需要刷新数据
@@ -146,7 +159,7 @@ router.get('/all', async (req: Request, res: Response) => {
  * GET /api/thirdparty/status
  * 获取第三方服务状态
  */
-router.get('/status', (req: Request, res: Response) => {
+router.get('/status', async (req: Request, res: Response) => {
   try {
     if (!thirdPartyManager) {
       return res.status(503).json({
@@ -154,6 +167,8 @@ router.get('/status', (req: Request, res: Response) => {
         error: '第三方服务未初始化',
       });
     }
+
+    await thirdPartyManager.ensureCacheLoaded();
 
     const status = thirdPartyManager.getStatus();
 
@@ -183,6 +198,8 @@ router.post('/refresh', async (req: Request, res: Response) => {
       });
     }
 
+    await thirdPartyManager.ensureCacheLoaded();
+
     const data = await thirdPartyManager.fetchAll();
 
     res.json({
@@ -205,4 +222,3 @@ router.post('/refresh', async (req: Request, res: Response) => {
 });
 
 export default router;
-

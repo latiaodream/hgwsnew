@@ -13,34 +13,21 @@ const mappingManager = new MappingManager();
  * GET /api/mapping/teams
  * 获取所有映射
  */
-router.get('/teams', (req: Request, res: Response) => {
+router.get('/teams', async (req: Request, res: Response) => {
   try {
-    const { search, league, verified, minConfidence } = req.query;
+    const { search, verified } = req.query;
 
-    let mappings = mappingManager.getAllMappings();
+    let mappings = await mappingManager.getAllMappings();
 
     // 搜索
     if (search && typeof search === 'string') {
-      mappings = mappingManager.searchMappings(search);
-    }
-
-    // 按联赛筛选
-    if (league && typeof league === 'string') {
-      mappings = mappingManager.filterByLeague(league);
+      mappings = await mappingManager.searchMappings(search);
     }
 
     // 按验证状态筛选
     if (verified !== undefined) {
       const isVerified = verified === 'true' || verified === '1';
-      mappings = mappings.filter(m => m.verified === isVerified);
-    }
-
-    // 按置信度筛选
-    if (minConfidence && typeof minConfidence === 'string') {
-      const min = parseFloat(minConfidence);
-      if (!isNaN(min)) {
-        mappings = mappings.filter(m => m.match_confidence >= min);
-      }
+      mappings = mappings.filter((m: any) => m.verified === isVerified);
     }
 
     res.json({
@@ -61,10 +48,10 @@ router.get('/teams', (req: Request, res: Response) => {
  * GET /api/mapping/teams/:id
  * 获取单个映射
  */
-router.get('/teams/:id', (req: Request, res: Response) => {
+router.get('/teams/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const mapping = mappingManager.getMappingById(id);
+    const mapping = await mappingManager.getMappingById(id);
 
     if (!mapping) {
       return res.status(404).json({
@@ -90,22 +77,21 @@ router.get('/teams/:id', (req: Request, res: Response) => {
  * POST /api/mapping/teams
  * 创建新映射
  */
-router.post('/teams', (req: Request, res: Response) => {
+router.post('/teams', async (req: Request, res: Response) => {
   try {
-    const { crown, isports, odds_api, match_confidence, verified } = req.body;
+    const { isports_en, isports_cn, crown_cn, verified } = req.body;
 
-    if (!crown || !isports || !odds_api) {
+    if (!isports_en || !isports_cn || !crown_cn) {
       return res.status(400).json({
         success: false,
         error: '缺少必要字段',
       });
     }
 
-    const mapping = mappingManager.createMapping({
-      crown,
-      isports,
-      odds_api,
-      match_confidence: match_confidence || 0.5,
+    const mapping = await mappingManager.createMapping({
+      isports_en,
+      isports_cn,
+      crown_cn,
       verified: verified || false,
     });
 
@@ -126,12 +112,12 @@ router.post('/teams', (req: Request, res: Response) => {
  * PUT /api/mapping/teams/:id
  * 更新映射
  */
-router.put('/teams/:id', (req: Request, res: Response) => {
+router.put('/teams/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const updates = req.body;
 
-    const mapping = mappingManager.updateMapping(id, updates);
+    const mapping = await mappingManager.updateMapping(id, updates);
 
     if (!mapping) {
       return res.status(404).json({
@@ -157,10 +143,10 @@ router.put('/teams/:id', (req: Request, res: Response) => {
  * DELETE /api/mapping/teams/:id
  * 删除映射
  */
-router.delete('/teams/:id', (req: Request, res: Response) => {
+router.delete('/teams/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const deleted = mappingManager.deleteMapping(id);
+    const deleted = await mappingManager.deleteMapping(id);
 
     if (!deleted) {
       return res.status(404).json({
@@ -186,7 +172,7 @@ router.delete('/teams/:id', (req: Request, res: Response) => {
  * POST /api/mapping/teams/batch
  * 批量导入映射
  */
-router.post('/teams/batch', (req: Request, res: Response) => {
+router.post('/teams/batch', async (req: Request, res: Response) => {
   try {
     const { mappings } = req.body;
 
@@ -197,7 +183,7 @@ router.post('/teams/batch', (req: Request, res: Response) => {
       });
     }
 
-    const imported = mappingManager.importMappings(mappings);
+    const imported = await mappingManager.importMappings(mappings);
 
     res.json({
       success: true,
@@ -217,10 +203,10 @@ router.post('/teams/batch', (req: Request, res: Response) => {
  * POST /api/mapping/verify/:id
  * 验证映射
  */
-router.post('/verify/:id', (req: Request, res: Response) => {
+router.post('/verify/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const mapping = mappingManager.verifyMapping(id);
+    const mapping = await mappingManager.verifyMapping(id);
 
     if (!mapping) {
       return res.status(404).json({
@@ -246,9 +232,9 @@ router.post('/verify/:id', (req: Request, res: Response) => {
  * GET /api/mapping/statistics
  * 获取统计信息
  */
-router.get('/statistics', (req: Request, res: Response) => {
+router.get('/statistics', async (req: Request, res: Response) => {
   try {
-    const stats = mappingManager.getStatistics();
+    const stats = await mappingManager.getStatistics();
 
     res.json({
       success: true,

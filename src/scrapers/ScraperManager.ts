@@ -2,6 +2,7 @@ import { CrownScraper } from './CrownScraper';
 import { AccountConfig, Match, ShowType, ScraperStatus } from '../types';
 import logger from '../utils/logger';
 import { EventEmitter } from 'events';
+import { CrownMatchRepository } from '../repositories/CrownMatchRepository';
 
 /**
  * 抓取器管理器
@@ -24,9 +25,12 @@ export class ScraperManager extends EventEmitter {
     ['today', parseInt(process.env.TODAY_ROTATION_MINUTES || '60', 10)],
     ['early', parseInt(process.env.EARLY_ROTATION_MINUTES || '60', 10)],
   ]);
+  private crownMatchRepository: CrownMatchRepository;
+  private useDatabase: boolean = true;
 
   constructor() {
     super();
+    this.crownMatchRepository = new CrownMatchRepository();
     this.initializeCache();
   }
 
@@ -222,6 +226,17 @@ export class ScraperManager extends EventEmitter {
       matches.forEach(match => {
         cache.set(match.gid, match);
       });
+
+      // 存储到数据库
+      if (this.useDatabase && matches.length > 0) {
+        try {
+          const crownMatches = this.convertToCrownMatches(matches, showType);
+          const saved = await this.crownMatchRepository.upsertBatch(crownMatches);
+          logger.debug(`[${showType}] 保存 ${saved} 场赛事到数据库`);
+        } catch (dbError: any) {
+          logger.error(`[${showType}] 保存到数据库失败:`, dbError.message);
+        }
+      }
 
       // 检测变化并发送事件
       this.detectChanges(showType, oldMatches, cache);
@@ -623,5 +638,31 @@ export class ScraperManager extends EventEmitter {
    */
   getStatusByType(showType: ShowType): ScraperStatus | undefined {
     return this.status.get(showType);
+  }
+
+  /**
+   * 转换 Match 为 CrownMatch 格式
+   */
+  private convertToCrownMatches(matches: Match[], showType: ShowType): any[] {
+    return matches.map(match => ({
+      gid: match.gid,
+      show_type: showType,
+      league: match.league_zh || match.league,
+      team_home: match.home_zh || match.home,
+      team_away: match.away_zh || match.away,
+      match_time: match.match_time,
+      handicap: match.markets?.full?.handicapLines?.[0]?.hdp,
+      handicap_home: match.markets?.full?.handicapLines?.[0]?.home,
+      handicap_away: match.markets?.full?.handicapLines?.[0]?.away,
+      over_under: match.markets?.full?.overUnderLines?.[0]?.hdp,
+      over: match.markets?.full?.overUnderLines?.[0]?.over,
+      under: match.markets?.full?.overUnderLines?.[0]?.under,
+      home_win: match.markets?.moneyline?.home,
+      draw: match.markets?.moneyline?.draw,
+      away_win: match.markets?.moneyline?.away,
+      strong: undefined, // 需要从原始数据中提取
+      more: undefined, // 需要从原始数据中提取
+      raw_data: match.raw || match,
+    }));
   }
 }

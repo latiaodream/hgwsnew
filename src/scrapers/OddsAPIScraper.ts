@@ -104,16 +104,22 @@ export class OddsAPIScraper {
         },
       });
 
-      if (!response.data || !response.data.data) {
-        throw new Error('API 返回数据格式错误');
+      logger.info(`[OddsAPI] 滚球API响应: ${JSON.stringify(response.data).substring(0, 200)}`);
+
+      if (!response.data || !Array.isArray(response.data)) {
+        logger.error(`[OddsAPI] 滚球API返回格式错误: ${JSON.stringify(response.data)}`);
+        return [];
       }
 
-      const matches = await this.fetchOddsForEvents(response.data.data, 'live');
+      const matches = await this.fetchOddsForEvents(response.data, 'live');
       logger.info(`[OddsAPI] 滚球赛事: ${matches.length} 场`);
-      
+
       return matches;
     } catch (error: any) {
-      logger.error('[OddsAPI] 获取滚球赛事失败:', error.message);
+      logger.error(`[OddsAPI] 获取滚球赛事失败: ${error.message}`);
+      if (error.response) {
+        logger.error(`[OddsAPI] 响应状态: ${error.response.status}, 数据: ${JSON.stringify(error.response.data)}`);
+      }
       return [];
     }
   }
@@ -132,16 +138,17 @@ export class OddsAPIScraper {
         },
       });
 
-      if (!response.data || !response.data.data) {
-        throw new Error('API 返回数据格式错误');
+      if (!response.data || !Array.isArray(response.data)) {
+        logger.error(`[OddsAPI] 今日API返回格式错误: ${JSON.stringify(response.data)}`);
+        return [];
       }
 
-      const matches = await this.fetchOddsForEvents(response.data.data, 'today');
+      const matches = await this.fetchOddsForEvents(response.data, 'today');
       logger.info(`[OddsAPI] 今日赛事: ${matches.length} 场`);
-      
+
       return matches;
     } catch (error: any) {
-      logger.error('[OddsAPI] 获取今日赛事失败:', error.message);
+      logger.error(`[OddsAPI] 获取今日赛事失败: ${error.message}`);
       return [];
     }
   }
@@ -160,62 +167,61 @@ export class OddsAPIScraper {
         },
       });
 
-      if (!response.data || !response.data.data) {
-        throw new Error('API 返回数据格式错误');
+      if (!response.data || !Array.isArray(response.data)) {
+        logger.error(`[OddsAPI] 明日API返回格式错误: ${JSON.stringify(response.data)}`);
+        return [];
       }
 
-      const matches = await this.fetchOddsForEvents(response.data.data, 'tomorrow');
+      const matches = await this.fetchOddsForEvents(response.data, 'tomorrow');
       logger.info(`[OddsAPI] 明日赛事: ${matches.length} 场`);
-      
+
       return matches;
     } catch (error: any) {
-      logger.error('[OddsAPI] 获取明日赛事失败:', error.message);
+      logger.error(`[OddsAPI] 获取明日赛事失败: ${error.message}`);
       return [];
     }
   }
 
   /**
-   * 为赛事获取赔率
+   * 为赛事获取赔率（只返回有 Crown 赔率的赛事）
    */
   private async fetchOddsForEvents(events: any[], status: 'live' | 'today' | 'tomorrow'): Promise<OddsAPIMatch[]> {
     const matches: OddsAPIMatch[] = [];
+    let totalEvents = events.length;
+    let eventsWithCrownOdds = 0;
 
-    // 批量获取赔率（每次最多10个）
-    const batchSize = 10;
-    for (let i = 0; i < events.length; i += batchSize) {
-      const batch = events.slice(i, i + batchSize);
-      const eventIds = batch.map(e => e.id).join(',');
-
+    // 逐个获取赔率（因为需要检查每个赛事是否有 Crown 赔率）
+    for (const event of events) {
       try {
-        const response = await this.client.get('/odds/multi', {
+        const response = await this.client.get('/odds', {
           params: {
             apiKey: this.apiKey,
-            eventIds,
+            eventId: event.id,
             bookmakers: this.crownBookmaker,
           },
         });
 
-        if (response.data && response.data.data) {
-          for (const oddsData of response.data.data) {
-            const event = batch.find(e => e.id === oddsData.event_id);
-            if (event && oddsData.bookmakers && oddsData.bookmakers.length > 0) {
-              const match = this.parseMatch(event, oddsData.bookmakers[0], status);
-              if (match) {
-                matches.push(match);
-              }
+        // 检查是否有 Crown 赔率数据
+        if (response.data && response.data.bookmakers && Object.keys(response.data.bookmakers).length > 0) {
+          const crownData = response.data.bookmakers[this.crownBookmaker];
+          if (crownData && crownData.markets && crownData.markets.length > 0) {
+            const match = this.parseMatch(event, crownData, status);
+            if (match) {
+              matches.push(match);
+              eventsWithCrownOdds++;
             }
           }
         }
-      } catch (error: any) {
-        logger.warn(`[OddsAPI] 获取赔率失败 (batch ${i / batchSize + 1}):`, error.message);
-      }
 
-      // 避免请求过快
-      if (i + batchSize < events.length) {
-        await new Promise(resolve => setTimeout(resolve, 200));
+        // 避免请求过快（API 限制）
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (error: any) {
+        // 忽略单个赛事的错误，继续处理下一个
+        logger.debug(`[OddsAPI] 赛事 ${event.id} 无 Crown 赔率或请求失败`);
       }
     }
 
+    logger.info(`[OddsAPI] ${status} 赛事: 总共 ${totalEvents} 场，有 Crown 赔率 ${eventsWithCrownOdds} 场`);
     return matches;
   }
 
@@ -334,5 +340,18 @@ export class OddsAPIScraper {
   getMatchById(matchId: string): OddsAPIMatch | undefined {
     return this.matchesCache.get(matchId);
   }
-}
 
+  /**
+   * 将外部缓存的数据写入本地缓存
+   */
+  hydrateCache(matches: OddsAPIMatch[]): void {
+    this.matchesCache.clear();
+    matches.forEach(match => {
+      if (match?.match_id) {
+        this.matchesCache.set(match.match_id, match);
+      }
+    });
+
+    logger.info(`[OddsAPI] hydrateCache(): 恢复 ${matches.length} 场赛事`);
+  }
+}

@@ -19,6 +19,7 @@ export interface Match {
   league: string;
   league_zh: string;
   match_time: string;
+  live_status?: string; // 滚球实时状态，如 "2H^82:14" 或 "HT"
   state: number; // 0: 未开始, 1: 进行中, 2: 已结束
   home_score?: number;
   away_score?: number;
@@ -29,6 +30,8 @@ export interface Match {
 
 // 盘口数据
 export interface Markets {
+  gid?: string; // 赛事 GID
+  match_time?: string; // 比赛时间
   moneyline?: {
     home?: number;
     draw?: number;
@@ -41,6 +44,11 @@ export interface Markets {
   half?: {
     handicapLines?: HandicapLine[];
     overUnderLines?: OverUnderLine[];
+  };
+  halfMoneyline?: {
+    home?: number;
+    draw?: number;
+    away?: number;
   };
 }
 
@@ -67,7 +75,11 @@ export enum MessageType {
   SCORE_UPDATE = 'score_update',     // 比分更新
   HEARTBEAT = 'heartbeat',           // 心跳
   ERROR = 'error',                   // 错误
-  
+
+  // 第三方数据推送
+  THIRDPARTY_FULL_DATA = 'thirdparty_full_data',       // 第三方全量数据
+  THIRDPARTY_UPDATE = 'thirdparty_update',             // 第三方数据更新
+
   // 客户端 -> 服务端
   AUTH = 'auth',                     // 认证
   SUBSCRIBE = 'subscribe',           // 订阅
@@ -85,6 +97,8 @@ export interface WSMessage {
 // 订阅选项
 export interface SubscribeOptions {
   showTypes?: ShowType[];  // 订阅的类型，不传则订阅全部
+  includeThirdparty?: boolean;  // 是否包含第三方数据，默认 false
+  thirdpartySources?: ('isports' | 'oddsapi')[];  // 订阅的第三方数据源
 }
 
 // 抓取器状态

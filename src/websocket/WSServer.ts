@@ -1,5 +1,6 @@
 import WebSocket, { WebSocketServer } from 'ws';
 import { ScraperManager } from '../scrapers/ScraperManager';
+import { ThirdPartyManager } from '../scrapers/ThirdPartyManager';
 import { MessageType, WSMessage, SubscribeOptions, ShowType } from '../types';
 import logger from '../utils/logger';
 
@@ -8,6 +9,7 @@ interface Client {
   id: string;
   isAuthenticated: boolean;
   subscriptions: Set<ShowType>;
+  thirdpartySubscriptions: Set<'isports' | 'oddsapi'>;
   lastPing: number;
 }
 
@@ -19,16 +21,21 @@ export class WSServer {
   private wss: WebSocketServer;
   private clients: Map<string, Client> = new Map();
   private scraperManager: ScraperManager;
+  private thirdPartyManager?: ThirdPartyManager;
   private heartbeatInterval?: NodeJS.Timeout;
   private authToken: string;
 
-  constructor(port: number, scraperManager: ScraperManager) {
+  constructor(port: number, scraperManager: ScraperManager, thirdPartyManager?: ThirdPartyManager) {
     this.scraperManager = scraperManager;
+    this.thirdPartyManager = thirdPartyManager;
     this.authToken = process.env.WS_AUTH_TOKEN || 'default-token';
 
     this.wss = new WebSocketServer({ port });
     this.setupWebSocketServer();
     this.setupScraperEvents();
+    if (this.thirdPartyManager) {
+      this.setupThirdPartyEvents();
+    }
     this.startHeartbeat();
 
     logger.info(`WebSocket 服务器启动在端口 ${port}`);
@@ -45,6 +52,7 @@ export class WSServer {
         id: clientId,
         isAuthenticated: false,
         subscriptions: new Set(),
+        thirdpartySubscriptions: new Set(),
         lastPing: Date.now(),
       };
 
@@ -127,6 +135,22 @@ export class WSServer {
   }
 
   /**
+   * 设置第三方数据事件监听
+   */
+  private setupThirdPartyEvents(): void {
+    if (!this.thirdPartyManager) return;
+
+    // 第三方数据更新
+    this.thirdPartyManager.on('matches:updated', ({ source, matches }) => {
+      this.broadcastThirdparty({
+        type: MessageType.THIRDPARTY_UPDATE,
+        data: { source, matches, count: matches.length },
+        timestamp: Date.now(),
+      }, [source]);
+    });
+  }
+
+  /**
    * 处理客户端消息
    */
   private handleMessage(clientId: string, data: Buffer): void {
@@ -193,6 +217,8 @@ export class WSServer {
 
     const options: SubscribeOptions = data || {};
     const showTypes = options.showTypes || ['live', 'today', 'early'];
+    const includeThirdparty = options.includeThirdparty || false;
+    const thirdpartySources = options.thirdpartySources || ['isports', 'oddsapi'];
 
     // 添加订阅
     showTypes.forEach(type => client.subscriptions.add(type));
@@ -208,7 +234,43 @@ export class WSServer {
       });
     });
 
-    logger.info(`客户端订阅: ${client.id}, 类型: ${showTypes.join(', ')}`);
+    // 订阅第三方数据
+    if (includeThirdparty && this.thirdPartyManager) {
+      thirdpartySources.forEach(source => client.thirdpartySubscriptions.add(source));
+
+      // 发送第三方全量数据
+      const thirdpartyData = this.thirdPartyManager.getAllData();
+
+      if (thirdpartySources.includes('isports')) {
+        this.sendMessage(client, {
+          type: MessageType.THIRDPARTY_FULL_DATA,
+          data: {
+            source: 'isports',
+            matches: thirdpartyData.isports,
+            count: thirdpartyData.isports.length,
+            last_update: thirdpartyData.last_update.isports,
+          },
+          timestamp: Date.now(),
+        });
+      }
+
+      if (thirdpartySources.includes('oddsapi')) {
+        this.sendMessage(client, {
+          type: MessageType.THIRDPARTY_FULL_DATA,
+          data: {
+            source: 'oddsapi',
+            matches: thirdpartyData.oddsapi,
+            count: thirdpartyData.oddsapi.length,
+            last_update: thirdpartyData.last_update.oddsapi,
+          },
+          timestamp: Date.now(),
+        });
+      }
+
+      logger.info(`客户端订阅: ${client.id}, 类型: ${showTypes.join(', ')}, 第三方: ${thirdpartySources.join(', ')}`);
+    } else {
+      logger.info(`客户端订阅: ${client.id}, 类型: ${showTypes.join(', ')}`);
+    }
   }
 
   /**
@@ -271,8 +333,28 @@ export class WSServer {
 
       // 如果指定了 showTypes，只发送给订阅了这些类型的客户端
       if (showTypes && showTypes.length > 0) {
-        const hasSubscription = showTypes.some(type => 
+        const hasSubscription = showTypes.some(type =>
           client.subscriptions.has(type)
+        );
+        if (!hasSubscription) continue;
+      }
+
+      this.sendMessage(client, message);
+    }
+  }
+
+  /**
+   * 广播第三方数据消息
+   */
+  private broadcastThirdparty(message: WSMessage, sources?: ('isports' | 'oddsapi')[]): void {
+    for (const client of this.clients.values()) {
+      // 只发送给已认证的客户端
+      if (!client.isAuthenticated) continue;
+
+      // 如果指定了 sources，只发送给订阅了这些数据源的客户端
+      if (sources && sources.length > 0) {
+        const hasSubscription = sources.some(source =>
+          client.thirdpartySubscriptions.has(source)
         );
         if (!hasSubscription) continue;
       }
