@@ -800,6 +800,10 @@
         <i class="ri-trophy-line"></i>
         <span>联赛映射</span>
       </div>
+      <div class="nav-item" data-page="match-push">
+        <i class="ri-send-plane-line"></i>
+        <span>赛事推送</span>
+      </div>
     </nav>
   </div>
 
@@ -1225,6 +1229,91 @@
           </div>
         </div>
       </div>
+
+      <!-- 赛事推送页面 -->
+      <div id="page-match-push" class="page" style="display: none;">
+        <div class="page-header">
+          <h2 class="page-title">赛事推送</h2>
+          <p class="page-subtitle">皇冠赛事 + iSports 数据补充</p>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">赛事列表</h3>
+            <div class="action-btns">
+              <button class="btn btn-primary btn-sm" onclick="loadMatchPushData()">
+                <i class="ri-refresh-line"></i> 刷新
+              </button>
+            </div>
+          </div>
+          <div class="card-body">
+            <!-- 统计信息 -->
+            <div id="match-push-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+              <div class="stat-card">
+                <div class="stat-label">总赛事数</div>
+                <div class="stat-value" id="stat-total">0</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">已匹配</div>
+                <div class="stat-value" id="stat-matched" style="color: var(--success);">0</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">未匹配</div>
+                <div class="stat-value" id="stat-unmatched" style="color: var(--warning);">0</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">匹配率</div>
+                <div class="stat-value" id="stat-rate">0%</div>
+              </div>
+            </div>
+
+            <!-- 筛选器 -->
+            <div class="filters">
+              <div class="filter-group">
+                <label class="filter-label">赛事类型</label>
+                <select id="match-push-type" onchange="loadMatchPushData()">
+                  <option value="live">滚球</option>
+                  <option value="today">今日</option>
+                  <option value="early">早盘</option>
+                </select>
+              </div>
+              <div class="filter-group">
+                <label class="filter-label">匹配状态</label>
+                <select id="match-push-filter" onchange="filterMatchPush()">
+                  <option value="all">全部</option>
+                  <option value="matched">已匹配</option>
+                  <option value="unmatched">未匹配</option>
+                </select>
+              </div>
+              <div class="filter-group">
+                <label class="filter-label">每页显示</label>
+                <select id="match-push-page-size" onchange="changeMatchPushPageSize()">
+                  <option value="20">20 条</option>
+                  <option value="50" selected>50 条</option>
+                  <option value="100">100 条</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- 赛事列表 -->
+            <div id="match-push-container" style="margin-top: 20px;">
+              <div style="text-align: center; padding: 40px;">
+                <div class="loading"></div>
+              </div>
+            </div>
+
+            <!-- 分页控件 -->
+            <div id="match-push-pagination" class="pagination" style="display: none;">
+              <button class="btn btn-sm" onclick="goToMatchPushPage(1)" id="match-push-first-page">首页</button>
+              <button class="btn btn-sm" onclick="goToMatchPushPage(currentMatchPushPage - 1)" id="match-push-prev-page">上一页</button>
+              <span id="match-push-page-info" style="margin: 0 15px;">第 1 页 / 共 1 页</span>
+              <button class="btn btn-sm" onclick="goToMatchPushPage(currentMatchPushPage + 1)" id="match-push-next-page">下一页</button>
+              <button class="btn btn-sm" onclick="goToMatchPushPage(totalMatchPushPages)" id="match-push-last-page">末页</button>
+              <span style="margin-left: 15px;">共 <span id="match-push-total-count">0</span> 条</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1466,8 +1555,10 @@
     let crownData = [];
     let mappingData = [];
     let leagueMappingData = [];
+    let matchPushData = [];
     let filteredThirdparty = [];
     let filteredCrown = [];
+    let filteredMatchPush = [];
 
     // 页面切换
     document.querySelectorAll('.nav-item').forEach(item => {
@@ -1487,6 +1578,7 @@
         else if (page === 'crown') loadCrownData('live');
         else if (page === 'mapping') loadMappingData();
         else if (page === 'league-mapping') loadLeagueMappingData();
+        else if (page === 'match-push') loadMatchPushData();
         else if (page === 'dashboard') loadDashboard();
       });
     });
@@ -3033,6 +3125,194 @@
 
     function updateStats() {
       loadDashboard();
+    }
+
+    // ==================== 赛事推送功能 ====================
+    let currentMatchPushPage = 1;
+    let matchPushPageSize = 50;
+    let totalMatchPushPages = 1;
+    let matchPushStats = {};
+
+    // 加载赛事推送数据
+    async function loadMatchPushData(page = 1) {
+      try {
+        const showType = document.getElementById('match-push-type').value;
+        const params = new URLSearchParams({
+          showType,
+          page,
+          pageSize: matchPushPageSize
+        });
+
+        const res = await fetch(`/api/match-push?${params}`);
+        const data = await res.json();
+
+        if (data.success) {
+          matchPushData = data.data;
+          matchPushStats = data.stats;
+          currentMatchPushPage = data.pagination.page;
+          totalMatchPushPages = data.pagination.totalPages;
+
+          // 更新统计信息
+          updateMatchPushStats();
+
+          // 应用筛选
+          filterMatchPush();
+
+          // 更新分页
+          updateMatchPushPagination();
+        } else {
+          alert('加载失败: ' + data.error);
+        }
+      } catch (error) {
+        console.error('加载赛事推送数据失败:', error);
+        alert('加载失败: ' + error.message);
+      }
+    }
+
+    // 更新统计信息
+    function updateMatchPushStats() {
+      document.getElementById('stat-total').textContent = matchPushStats.total || 0;
+      document.getElementById('stat-matched').textContent = matchPushStats.matched || 0;
+      document.getElementById('stat-unmatched').textContent = matchPushStats.unmatched || 0;
+
+      const rate = matchPushStats.total > 0
+        ? ((matchPushStats.matched / matchPushStats.total) * 100).toFixed(1)
+        : 0;
+      document.getElementById('stat-rate').textContent = rate + '%';
+    }
+
+    // 筛选赛事
+    function filterMatchPush() {
+      const filter = document.getElementById('match-push-filter').value;
+
+      if (filter === 'all') {
+        filteredMatchPush = matchPushData;
+      } else if (filter === 'matched') {
+        filteredMatchPush = matchPushData.filter(m => m.matched);
+      } else if (filter === 'unmatched') {
+        filteredMatchPush = matchPushData.filter(m => !m.matched);
+      }
+
+      renderMatchPush();
+    }
+
+    // 渲染赛事列表
+    function renderMatchPush() {
+      const container = document.getElementById('match-push-container');
+
+      if (filteredMatchPush.length === 0) {
+        container.innerHTML = `
+          <div style="text-align: center; padding: 40px;">
+            <i class="ri-inbox-line" style="font-size: 48px; color: var(--text-muted); margin-bottom: 15px;"></i>
+            <div style="color: var(--text-muted);">暂无数据</div>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filteredMatchPush.map(item => {
+        const crown = item.crown;
+        const isports = item.isports;
+        const matched = item.matched;
+
+        return `
+          <div class="match-card" style="margin-bottom: 15px; border-left: 3px solid ${matched ? 'var(--success)' : 'var(--warning)'};">
+            <div class="match-header">
+              <div class="team-home">${crown.home_zh}</div>
+              <div class="match-info">
+                <div>${crown.league_zh} <span class="badge badge-${crown.showType}">${getShowTypeText(crown.showType)}</span></div>
+                <div class="match-time">${formatTime(crown.match_time)}</div>
+                ${matched ? '<span class="badge badge-success" style="margin-top: 5px;">已匹配</span>' : '<span class="badge badge-warning" style="margin-top: 5px;">未匹配</span>'}
+              </div>
+              <div class="team-away">${crown.away_zh}</div>
+            </div>
+
+            <!-- 皇冠赔率 -->
+            <div style="margin-top: 15px; padding: 15px; background: rgba(59, 130, 246, 0.1); border-radius: 8px;">
+              <div style="font-weight: bold; margin-bottom: 10px; color: var(--primary);">
+                <i class="ri-trophy-line"></i> 皇冠赔率
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                <div>
+                  <div style="color: var(--text-muted); font-size: 12px;">让球</div>
+                  <div>${crown.markets?.handicap?.handicap || '-'} (${crown.markets?.handicap?.home || '-'} / ${crown.markets?.handicap?.away || '-'})</div>
+                </div>
+                <div>
+                  <div style="color: var(--text-muted); font-size: 12px;">大小球</div>
+                  <div>${crown.markets?.overUnder?.line || '-'} (${crown.markets?.overUnder?.over || '-'} / ${crown.markets?.overUnder?.under || '-'})</div>
+                </div>
+                <div>
+                  <div style="color: var(--text-muted); font-size: 12px;">独赢</div>
+                  <div>${crown.markets?.moneyline?.home || '-'} / ${crown.markets?.moneyline?.draw || '-'} / ${crown.markets?.moneyline?.away || '-'}</div>
+                </div>
+              </div>
+            </div>
+
+            ${matched && isports ? `
+              <!-- iSports 赔率 -->
+              <div style="margin-top: 10px; padding: 15px; background: rgba(16, 185, 129, 0.1); border-radius: 8px;">
+                <div style="font-weight: bold; margin-bottom: 10px; color: var(--success);">
+                  <i class="ri-database-2-line"></i> iSports 赔率
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                  <div>
+                    <div style="color: var(--text-muted); font-size: 12px;">让球</div>
+                    <div>${isports.odds?.handicap?.[0]?.handicap_line || '-'} (${isports.odds?.handicap?.[0]?.home_odds || '-'} / ${isports.odds?.handicap?.[0]?.away_odds || '-'})</div>
+                  </div>
+                  <div>
+                    <div style="color: var(--text-muted); font-size: 12px;">大小球</div>
+                    <div>${isports.odds?.totals?.[0]?.total_line || '-'} (${isports.odds?.totals?.[0]?.over_odds || '-'} / ${isports.odds?.totals?.[0]?.under_odds || '-'})</div>
+                  </div>
+                  <div>
+                    <div style="color: var(--text-muted); font-size: 12px;">独赢</div>
+                    <div>${isports.odds?.moneyline?.home_odds || '-'} / ${isports.odds?.moneyline?.draw_odds || '-'} / ${isports.odds?.moneyline?.away_odds || '-'}</div>
+                  </div>
+                </div>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    // 获取赛事类型文本
+    function getShowTypeText(showType) {
+      const map = { 'live': '滚球', 'today': '今日', 'early': '早盘' };
+      return map[showType] || showType;
+    }
+
+    // 分页相关
+    function changeMatchPushPageSize() {
+      matchPushPageSize = parseInt(document.getElementById('match-push-page-size').value);
+      loadMatchPushData(1);
+    }
+
+    function goToMatchPushPage(page) {
+      if (page < 1 || page > totalMatchPushPages) return;
+      loadMatchPushData(page);
+    }
+
+    function updateMatchPushPagination() {
+      const pagination = document.getElementById('match-push-pagination');
+      const pageInfo = document.getElementById('match-push-page-info');
+      const totalCount = document.getElementById('match-push-total-count');
+      const firstBtn = document.getElementById('match-push-first-page');
+      const prevBtn = document.getElementById('match-push-prev-page');
+      const nextBtn = document.getElementById('match-push-next-page');
+      const lastBtn = document.getElementById('match-push-last-page');
+
+      if (totalMatchPushPages > 1) {
+        pagination.style.display = 'flex';
+        pageInfo.textContent = `第 ${currentMatchPushPage} 页 / 共 ${totalMatchPushPages} 页`;
+        totalCount.textContent = matchPushStats.total || 0;
+
+        firstBtn.disabled = currentMatchPushPage === 1;
+        prevBtn.disabled = currentMatchPushPage === 1;
+        nextBtn.disabled = currentMatchPushPage === totalMatchPushPages;
+        lastBtn.disabled = currentMatchPushPage === totalMatchPushPages;
+      } else {
+        pagination.style.display = 'none';
+      }
     }
 
     // 页面加载完成后初始化

@@ -12,6 +12,7 @@ import mappingRouter from './routes/mapping';
 import leagueMappingRouter from './routes/league-mapping';
 import thirdpartyRouter, { setThirdPartyManager } from './routes/thirdparty';
 import matchesRouter, { setScraperManager } from './routes/matches';
+import matchPushRouter, { setManagers } from './routes/match-push';
 import { testConnection, initDatabase, closeDatabase } from './config/database';
 
 // 加载环境变量
@@ -49,6 +50,7 @@ class Application {
     this.expressApp.use('/api/league-mapping', leagueMappingRouter);
     this.expressApp.use('/api/thirdparty', thirdpartyRouter);
     this.expressApp.use('/api/matches', matchesRouter);
+    this.expressApp.use('/api/match-push', matchPushRouter);
 
     // 页面路由
     this.expressApp.get('/', (req, res) => {
@@ -169,6 +171,7 @@ class Application {
 
     // 设置到路由中
     setThirdPartyManager(this.thirdPartyManager);
+    setManagers(this.scraperManager, this.thirdPartyManager);
 
     // 先加载缓存，然后再启动定时抓取
     this.thirdPartyManager.ensureCacheLoaded()

@@ -374,6 +374,25 @@ export class MappingManager {
   }
 
   /**
+   * 根据皇冠名称查找映射
+   */
+  async findMappingByCrownName(crownCn: string): Promise<TeamMapping | null> {
+    if (this.useDatabase) {
+      // 确保缓存已加载
+      await this.ensureCacheLoaded();
+      // 从缓存查找
+      return Array.from(this.mappings.values()).find(m =>
+        m.crown_cn === crownCn
+      ) || null;
+    } else {
+      // 从内存查找
+      return Array.from(this.mappings.values()).find(m =>
+        m.crown_cn === crownCn
+      ) || null;
+    }
+  }
+
+  /**
    * 清除缓存（在数据更新后调用）
    */
   clearCache(): void {
