@@ -16,10 +16,15 @@ export interface ISportsMatch {
   league_id: string;
   league_name_cn: string;
   league_name_en: string;
+  league_name_tc?: string; // 繁体中文
+  team_home_id?: string; // 主队 ID
   team_home_cn: string;
   team_home_en: string;
+  team_home_tc?: string; // 繁体中文
+  team_away_id?: string; // 客队 ID
   team_away_cn: string;
   team_away_en: string;
+  team_away_tc?: string; // 繁体中文
   match_time: string;
   status: 'live' | 'today' | 'early';
   score_home?: number;
@@ -54,6 +59,7 @@ export class ISportsAPIScraper {
   private client: AxiosInstance;
   private crownCompanyId: number = 3; // 皇冠的 Company ID
   private matchesCache: Map<string, ISportsMatch> = new Map();
+  private tcLanguageCache: Map<string, any> = new Map(); // 繁体中文缓存
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;
@@ -69,10 +75,58 @@ export class ISportsAPIScraper {
   }
 
   /**
+   * 获取繁体中文语言包
+   */
+  private async fetchTraditionalChinese(): Promise<void> {
+    try {
+      const response = await this.client.get('/languagetc', {
+        params: {
+          api_key: this.apiKey,
+          sport: 'football',
+        },
+      });
+
+      if (response.data?.code === 0 && response.data?.data) {
+        const data = response.data.data[0];
+
+        // 缓存联赛繁体名称
+        if (data.leagues) {
+          data.leagues.forEach((league: any) => {
+            this.tcLanguageCache.set(`league_${league.leagueId}`, league.name_tc);
+          });
+        }
+
+        // 缓存球队繁体名称
+        if (data.teams) {
+          data.teams.forEach((team: any) => {
+            this.tcLanguageCache.set(`team_${team.teamId}`, team.name_tc);
+          });
+        }
+
+        logger.info(`[ISportsAPI] 繁体中文语言包加载完成，共 ${this.tcLanguageCache.size} 条`);
+      }
+    } catch (error: any) {
+      logger.error('[ISportsAPI] 获取繁体中文语言包失败:', error.message);
+    }
+  }
+
+  /**
+   * 获取繁体中文名称
+   */
+  private getTCName(type: 'league' | 'team', id: string): string | undefined {
+    return this.tcLanguageCache.get(`${type}_${id}`);
+  }
+
+  /**
    * 获取所有赛事（滚球、今日、明日）
    */
   async fetchAllMatches(): Promise<ISportsMatch[]> {
     try {
+      // 首次加载时获取繁体中文语言包
+      if (this.tcLanguageCache.size === 0) {
+        await this.fetchTraditionalChinese();
+      }
+
       // 获取所有赛事（已经在 fetchOddsMatches 中分类）
       const allMatches = await this.fetchOddsMatches();
 
@@ -90,8 +144,17 @@ export class ISportsAPIScraper {
       // 清空旧缓存
       this.matchesCache.clear();
 
-      // 更新缓存
+      // 更新缓存（添加繁体中文）
       allMatches.forEach(match => {
+        // 添加繁体中文名称
+        match.league_name_tc = this.getTCName('league', match.league_id);
+        if (match.team_home_id) {
+          match.team_home_tc = this.getTCName('team', match.team_home_id);
+        }
+        if (match.team_away_id) {
+          match.team_away_tc = this.getTCName('team', match.team_away_id);
+        }
+
         this.matchesCache.set(match.match_id, match);
       });
 
@@ -181,8 +244,10 @@ export class ISportsAPIScraper {
             match.league_id = detail.leagueId;
             match.league_name_cn = detail.leagueName;
             match.league_name_en = detail.leagueName;
+            match.team_home_id = detail.homeId;
             match.team_home_cn = detail.homeName;
             match.team_home_en = detail.homeName;
+            match.team_away_id = detail.awayId;
             match.team_away_cn = detail.awayName;
             match.team_away_en = detail.awayName;
 

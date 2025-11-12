@@ -3580,14 +3580,17 @@
                 <div style="margin-bottom: 8px;">
                   <div style="font-size: 14px; color: var(--text-muted);">联赛</div>
                   <div style="font-weight: 500;">${isports.league_name_cn || isports.league_name_en}</div>
+                  ${isports.league_name_tc ? `<div style="font-size: 12px; color: var(--text-muted);">繁体: ${isports.league_name_tc}</div>` : ''}
                 </div>
                 <div style="margin-bottom: 8px;">
                   <div style="font-size: 14px; color: var(--text-muted);">主队</div>
                   <div style="font-weight: 500;">${isports.team_home_cn || isports.team_home_en}</div>
+                  ${isports.team_home_tc ? `<div style="font-size: 12px; color: var(--text-muted);">繁体: ${isports.team_home_tc}</div>` : ''}
                 </div>
                 <div style="margin-bottom: 8px;">
                   <div style="font-size: 14px; color: var(--text-muted);">客队</div>
                   <div style="font-weight: 500;">${isports.team_away_cn || isports.team_away_en}</div>
+                  ${isports.team_away_tc ? `<div style="font-size: 12px; color: var(--text-muted);">繁体: ${isports.team_away_tc}</div>` : ''}
                 </div>
                 <div style="margin-bottom: 8px;">
                   <div style="font-size: 14px; color: var(--text-muted);">时间</div>
