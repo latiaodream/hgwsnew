@@ -7,8 +7,14 @@ import { Router, Request, Response } from 'express';
 import { Match, ShowType } from '../types';
 import { ThirdPartyManager } from '../scrapers/ThirdPartyManager';
 import { ISportsMatch } from '../scrapers/ISportsAPIScraper';
+import { MappingManager } from '../utils/MappingManager';
+import { LeagueMappingManager } from '../utils/LeagueMappingManager';
 import logger from '../utils/logger';
 import ExcelJS from 'exceljs';
+
+// 初始化映射管理器
+const teamMappingManager = new MappingManager();
+const leagueMappingManager = new LeagueMappingManager();
 
 const router = Router();
 
@@ -27,6 +33,57 @@ export function setManagers(scraper: any, thirdParty: ThirdPartyManager) {
 
 // 临时存储手动匹配关系（实际应该存储到数据库）
 const manualMatches = new Map<string, string>(); // crownGid -> isportsMatchId
+
+/**
+ * 应用球队映射到 iSports 赛事
+ * 优先级：crown_cn > isports_cn > isports_en
+ */
+async function applyTeamMappingToISports(match: ISportsMatch): Promise<ISportsMatch> {
+  const homeMapping = await teamMappingManager.findMappingByISportsName(match.team_home_en, match.team_home_cn);
+  const awayMapping = await teamMappingManager.findMappingByISportsName(match.team_away_en, match.team_away_cn);
+
+  // 优先使用 crown_cn，如果为空则使用 isports_cn，最后才用原始的 team_home_cn
+  const homeCn = (homeMapping?.crown_cn && homeMapping.crown_cn.trim() !== '')
+    ? homeMapping.crown_cn
+    : (homeMapping?.isports_cn || match.team_home_cn);
+
+  const awayCn = (awayMapping?.crown_cn && awayMapping.crown_cn.trim() !== '')
+    ? awayMapping.crown_cn
+    : (awayMapping?.isports_cn || match.team_away_cn);
+
+  return {
+    ...match,
+    team_home_cn: homeCn,
+    team_away_cn: awayCn,
+  };
+}
+
+/**
+ * 应用联赛映射到 iSports 赛事
+ * 优先级：crown_cn > isports_cn > isports_en
+ */
+async function applyLeagueMappingToISports(match: ISportsMatch): Promise<ISportsMatch> {
+  const leagueMapping = await leagueMappingManager.findMappingByISportsName(match.league_name_en, match.league_name_cn);
+
+  // 优先使用 crown_cn，如果为空则使用 isports_cn，最后才用原始的 league_name_cn
+  const leagueCn = (leagueMapping?.crown_cn && leagueMapping.crown_cn.trim() !== '')
+    ? leagueMapping.crown_cn
+    : (leagueMapping?.isports_cn || match.league_name_cn);
+
+  return {
+    ...match,
+    league_name_cn: leagueCn,
+  };
+}
+
+/**
+ * 应用所有映射到 iSports 赛事
+ */
+async function applyMappingsToISports(match: ISportsMatch): Promise<ISportsMatch> {
+  let mapped = await applyTeamMappingToISports(match);
+  mapped = await applyLeagueMappingToISports(mapped);
+  return mapped;
+}
 
 /**
  * 计算两个字符串的相似度（Levenshtein 距离）
@@ -134,9 +191,15 @@ router.get('/', async (req: Request, res: Response) => {
     const crownMatches: Match[] = scraperManager.getMatches(showType as ShowType);
     logger.info(`[MatchCompare] 获取到 ${crownMatches.length} 场皇冠赛事`);
 
-    // 获取 iSports 赛事
-    const isportsMatches: ISportsMatch[] = thirdPartyManager.getISportsCachedData();
-    logger.info(`[MatchCompare] 获取到 ${isportsMatches.length} 场 iSports 赛事`);
+    // 获取 iSports 赛事并应用映射
+    const rawIsportsMatches: ISportsMatch[] = thirdPartyManager.getISportsCachedData();
+    logger.info(`[MatchCompare] 获取到 ${rawIsportsMatches.length} 场 iSports 赛事`);
+
+    // 应用映射到所有 iSports 赛事
+    const isportsMatches = await Promise.all(
+      rawIsportsMatches.map(match => applyMappingsToISports(match))
+    );
+    logger.info(`[MatchCompare] 已应用映射到 ${isportsMatches.length} 场 iSports 赛事`);
 
     // 过滤时间范围
     let filteredCrown = crownMatches;
@@ -342,7 +405,12 @@ router.get('/export', async (req: Request, res: Response) => {
 
     // 获取皇冠赛事
     const crownMatches: Match[] = scraperManager.getMatches(showType as ShowType);
-    const isportsMatches: ISportsMatch[] = thirdPartyManager.getISportsCachedData();
+
+    // 获取 iSports 赛事并应用映射
+    const rawIsportsMatches: ISportsMatch[] = thirdPartyManager.getISportsCachedData();
+    const isportsMatches = await Promise.all(
+      rawIsportsMatches.map(match => applyMappingsToISports(match))
+    );
 
     // 过滤时间范围
     let filteredCrown = crownMatches;
