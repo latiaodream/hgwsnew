@@ -225,15 +225,18 @@ export class ScraperManager extends EventEmitter {
     try {
       // 使用共享抓取器抓取数据
       const matches = await this.sharedScraper.fetchMatchesByType(showType);
+      logger.info(`[${showType}] 📥 抓取完成，获得 ${matches.length} 场赛事`);
 
       const cache = this.matchesCache.get(showType)!;
       const oldMatches = new Map(cache);
+      logger.info(`[${showType}] 📦 缓存状态: 旧=${oldMatches.size}, 新=${matches.length}`);
 
       // 更新缓存
       cache.clear();
       matches.forEach(match => {
         cache.set(match.gid, match);
       });
+      logger.info(`[${showType}] 💾 缓存已更新`);
 
       // 存储到数据库
       logger.info(`[${showType}] 🔍 数据库保存检查: useDatabase=${this.useDatabase}, matches.length=${matches.length}`);
