@@ -329,20 +329,11 @@ router.post('/teams/import-excel', upload.single('file'), async (req: Request, r
 
       logger.debug(`[API] 解析第 ${i + 1} 行: isports_en="${isports_en}", isports_cn="${isports_cn}", crown_cn="${crown_cn}"`);
 
-      // 至少需要 isports_en 和 crown_cn
+      // 至少需要 isports_en（crown_cn 可以为空，用于后续匹配）
       if (!isports_en) {
         errors.push({
           row: i + 1,
           error: '缺少 isports_en 字段',
-          data: row,
-        });
-        continue;
-      }
-
-      if (!crown_cn) {
-        errors.push({
-          row: i + 1,
-          error: '缺少 crown_cn 字段（请填写翻译）',
           data: row,
         });
         continue;
