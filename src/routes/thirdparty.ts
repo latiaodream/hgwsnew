@@ -313,4 +313,110 @@ router.post('/refresh', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /api/thirdparty/export-teams
+ * 导出第三方赛事的球队信息（用于翻译）
+ */
+router.get('/export-teams', async (req: Request, res: Response) => {
+  try {
+    if (!thirdPartyManager) {
+      return res.status(503).json({
+        success: false,
+        error: '第三方服务未初始化',
+      });
+    }
+
+    await thirdPartyManager.ensureCacheLoaded();
+
+    const data = thirdPartyManager.getCachedData();
+
+    // 收集所有球队名称（去重）
+    const teamsSet = new Set<string>();
+
+    // 从 iSports 收集
+    data.isports.forEach(match => {
+      if (match.team_home_en) teamsSet.add(`${match.team_home_en}|${match.team_home_cn || ''}`);
+      if (match.team_away_en) teamsSet.add(`${match.team_away_en}|${match.team_away_cn || ''}`);
+    });
+
+    // 从 Odds-API 收集
+    data.oddsapi.forEach(match => {
+      if (match.team_home_en) teamsSet.add(`${match.team_home_en}|${match.team_home_cn || ''}`);
+      if (match.team_away_en) teamsSet.add(`${match.team_away_en}|${match.team_away_cn || ''}`);
+    });
+
+    // 转换为数组并排序
+    const teams = Array.from(teamsSet)
+      .map(item => {
+        const [en, cn] = item.split('|');
+        return { isports_en: en, isports_cn: cn, crown_cn: '' };
+      })
+      .sort((a, b) => a.isports_en.localeCompare(b.isports_en));
+
+    res.json({
+      success: true,
+      data: teams,
+      count: teams.length,
+    });
+  } catch (error: any) {
+    logger.error('[API] 导出球队信息失败:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/thirdparty/export-leagues
+ * 导出第三方赛事的联赛信息（用于翻译）
+ */
+router.get('/export-leagues', async (req: Request, res: Response) => {
+  try {
+    if (!thirdPartyManager) {
+      return res.status(503).json({
+        success: false,
+        error: '第三方服务未初始化',
+      });
+    }
+
+    await thirdPartyManager.ensureCacheLoaded();
+
+    const data = thirdPartyManager.getCachedData();
+
+    // 收集所有联赛名称（去重）
+    const leaguesSet = new Set<string>();
+
+    // 从 iSports 收集
+    data.isports.forEach(match => {
+      if (match.league_name_en) leaguesSet.add(`${match.league_name_en}|${match.league_name_cn || ''}`);
+    });
+
+    // 从 Odds-API 收集
+    data.oddsapi.forEach(match => {
+      if (match.league_name_en) leaguesSet.add(`${match.league_name_en}|${match.league_name_cn || ''}`);
+    });
+
+    // 转换为数组并排序
+    const leagues = Array.from(leaguesSet)
+      .map(item => {
+        const [en, cn] = item.split('|');
+        return { isports_en: en, isports_cn: cn, crown_cn: '' };
+      })
+      .sort((a, b) => a.isports_en.localeCompare(b.isports_en));
+
+    res.json({
+      success: true,
+      data: leagues,
+      count: leagues.length,
+    });
+  } catch (error: any) {
+    logger.error('[API] 导出联赛信息失败:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
 export default router;

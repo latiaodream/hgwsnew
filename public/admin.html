@@ -915,8 +915,14 @@
           <div class="card-header">
             <h3 class="card-title">赛事列表</h3>
             <div class="action-btns">
+              <button class="btn btn-success btn-sm" onclick="exportTeams()">
+                <i class="ri-team-line"></i> 导出球队
+              </button>
+              <button class="btn btn-success btn-sm" onclick="exportLeagues()">
+                <i class="ri-trophy-line"></i> 导出联赛
+              </button>
               <button class="btn btn-secondary btn-sm" onclick="exportData('thirdparty')">
-                <i class="ri-download-line"></i> 导出
+                <i class="ri-download-line"></i> 导出赛事
               </button>
               <button class="btn btn-primary btn-sm" onclick="refreshThirdParty()">
                 <i class="ri-refresh-line"></i> 刷新
@@ -2664,6 +2670,78 @@
 
     function viewCrownDetail(matchId) {
       alert('查看皇冠赛事详情: ' + matchId);
+    }
+
+    // 导出球队信息（用于翻译）
+    async function exportTeams() {
+      try {
+        const res = await fetch('/api/thirdparty/export-teams');
+        const data = await res.json();
+
+        if (data.success) {
+          // 转换为 CSV 格式
+          const csv = [
+            ['isports_en', 'isports_cn', 'crown_cn'].join(','),
+            ...data.data.map(team => [
+              team.isports_en,
+              team.isports_cn || '',
+              team.crown_cn || ''
+            ].join(','))
+          ].join('\n');
+
+          // 添加 BOM 以支持 Excel 正确显示中文
+          const BOM = '\uFEFF';
+          const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `teams-export-${new Date().toISOString().split('T')[0]}.csv`;
+          link.click();
+          URL.revokeObjectURL(url);
+
+          alert(`导出成功！共导出 ${data.count} 个球队`);
+        } else {
+          alert('导出失败: ' + data.error);
+        }
+      } catch (error) {
+        alert('导出失败: ' + error.message);
+      }
+    }
+
+    // 导出联赛信息（用于翻译）
+    async function exportLeagues() {
+      try {
+        const res = await fetch('/api/thirdparty/export-leagues');
+        const data = await res.json();
+
+        if (data.success) {
+          // 转换为 CSV 格式
+          const csv = [
+            ['isports_en', 'isports_cn', 'crown_cn'].join(','),
+            ...data.data.map(league => [
+              league.isports_en,
+              league.isports_cn || '',
+              league.crown_cn || ''
+            ].join(','))
+          ].join('\n');
+
+          // 添加 BOM 以支持 Excel 正确显示中文
+          const BOM = '\uFEFF';
+          const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `leagues-export-${new Date().toISOString().split('T')[0]}.csv`;
+          link.click();
+          URL.revokeObjectURL(url);
+
+          alert(`导出成功！共导出 ${data.count} 个联赛`);
+        } else {
+          alert('导出失败: ' + data.error);
+        }
+      } catch (error) {
+        alert('导出失败: ' + error.message);
+      }
     }
 
     function exportData(type) {
