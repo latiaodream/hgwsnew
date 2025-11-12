@@ -89,18 +89,30 @@ export class ISportsAPIScraper {
       if (response.data?.code === 0 && response.data?.data) {
         const data = response.data.data[0];
 
+        logger.info(`[ISportsAPI] 繁体语言包数据结构: ${JSON.stringify(Object.keys(data))}`);
+
         // 缓存联赛繁体名称
         if (data.leagues) {
+          let leagueCount = 0;
           data.leagues.forEach((league: any) => {
             this.tcLanguageCache.set(`league_${league.leagueId}`, league.name_tc);
+            leagueCount++;
           });
+          logger.info(`[ISportsAPI] 缓存了 ${leagueCount} 个联赛繁体名称`);
+        } else {
+          logger.warn('[ISportsAPI] 繁体语言包中没有 leagues 字段');
         }
 
         // 缓存球队繁体名称
         if (data.teams) {
+          let teamCount = 0;
           data.teams.forEach((team: any) => {
             this.tcLanguageCache.set(`team_${team.teamId}`, team.name_tc);
+            teamCount++;
           });
+          logger.info(`[ISportsAPI] 缓存了 ${teamCount} 个球队繁体名称`);
+        } else {
+          logger.warn('[ISportsAPI] 繁体语言包中没有 teams 字段');
         }
 
         logger.info(`[ISportsAPI] 繁体中文语言包加载完成，共 ${this.tcLanguageCache.size} 条`);
@@ -145,18 +157,28 @@ export class ISportsAPIScraper {
       this.matchesCache.clear();
 
       // 更新缓存（添加繁体中文）
+      let leagueTCCount = 0;
+      let teamHomeTCCount = 0;
+      let teamAwayTCCount = 0;
+
       allMatches.forEach(match => {
         // 添加繁体中文名称
         match.league_name_tc = this.getTCName('league', match.league_id);
+        if (match.league_name_tc) leagueTCCount++;
+
         if (match.team_home_id) {
           match.team_home_tc = this.getTCName('team', match.team_home_id);
+          if (match.team_home_tc) teamHomeTCCount++;
         }
         if (match.team_away_id) {
           match.team_away_tc = this.getTCName('team', match.team_away_id);
+          if (match.team_away_tc) teamAwayTCCount++;
         }
 
         this.matchesCache.set(match.match_id, match);
       });
+
+      logger.info(`[ISportsAPI] 繁体匹配统计: 联赛 ${leagueTCCount}/${allMatches.length}, 主队 ${teamHomeTCCount}/${allMatches.length}, 客队 ${teamAwayTCCount}/${allMatches.length}`);
 
       logger.info(`[ISportsAPI] 更新缓存后 matchesCache.size = ${this.matchesCache.size}`);
 
