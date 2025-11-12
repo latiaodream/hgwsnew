@@ -136,7 +136,7 @@ function getTimeDiff(time1: string, time2: string): number {
  * 新规则：时间一样（30分钟内），联赛名称相似度 >= 20% 就匹配
  * 增强：使用繁体字进行匹配
  */
-function aiMatch(crown: Match, isports: ISportsMatch): { matched: boolean; confidence: number; timeDiff: number } {
+function aiMatch(crown: Match, isports: ISportsMatch, debug: boolean = false): { matched: boolean; confidence: number; timeDiff: number; debugInfo?: any } {
   // 1. 时间差必须在 30 分钟内
   const timeDiff = getTimeDiff(crown.match_time, isports.match_time);
   if (timeDiff > 30) {
@@ -184,8 +184,109 @@ function aiMatch(crown: Match, isports: ISportsMatch): { matched: boolean; confi
   // 5. 匹配规则：联赛相似度 >= 20% 或 综合评分 >= 50%
   const matched = leagueSimilarity >= 0.2 || confidence >= 0.5;
 
-  return { matched, confidence, timeDiff };
+  const result: any = { matched, confidence, timeDiff };
+
+  // 调试信息
+  if (debug) {
+    result.debugInfo = {
+      crown: {
+        league: crown.league_zh,
+        home: crown.home_zh,
+        away: crown.away_zh,
+        time: crown.match_time,
+      },
+      isports: {
+        league_cn: isports.league_name_cn,
+        league_tc: isports.league_name_tc,
+        league_en: isports.league_name_en,
+        home_cn: isports.team_home_cn,
+        home_tc: isports.team_home_tc,
+        home_en: isports.team_home_en,
+        away_cn: isports.team_away_cn,
+        away_tc: isports.team_away_tc,
+        away_en: isports.team_away_en,
+        time: isports.match_time,
+      },
+      similarities: {
+        league: leagueSimilarity,
+        home: homeSimilarity,
+        away: awaySimilarity,
+      },
+      timeDiff,
+      confidence,
+      matched,
+    };
+  }
+
+  return result;
 }
+
+/**
+ * GET /api/match-compare/debug
+ * 调试匹配算法
+ */
+router.get('/debug', async (req: Request, res: Response) => {
+  try {
+    if (!scraperManager || !thirdPartyManager) {
+      return res.status(500).json({ error: '管理器未初始化' });
+    }
+
+    const showType = (req.query.showType as string) || 'live';
+
+    // 获取皇冠赛事
+    const crownMatches = scraperManager.getMatches().filter((m: Match) => m.showType === showType);
+
+    // 获取 iSports 赛事
+    const isportsData = thirdPartyManager.getISportsCachedData();
+    const isportsMatches = isportsData.filter((m: ISportsMatch) => m.status === showType);
+
+    // 应用映射
+    const mappedIsportsMatchesPromises = isportsMatches.map(m => applyMappingsToISports(m));
+    const mappedIsportsMatches = await Promise.all(mappedIsportsMatchesPromises);
+
+    logger.info(`[MatchCompare Debug] 皇冠赛事: ${crownMatches.length}, iSports 赛事: ${mappedIsportsMatches.length}`);
+
+    // 对每场皇冠赛事，找出最佳匹配
+    const debugResults = crownMatches.slice(0, 5).map((crown: Match) => {
+      // 找出所有可能的匹配
+      const candidates = mappedIsportsMatches.map((isports: ISportsMatch) => {
+        const result = aiMatch(crown, isports, true);
+        return {
+          isports: {
+            match_id: isports.match_id,
+            league: isports.league_name_cn,
+            home: isports.team_home_cn,
+            away: isports.team_away_cn,
+            time: isports.match_time,
+          },
+          ...result,
+        };
+      }).sort((a, b) => b.confidence - a.confidence).slice(0, 10); // 取前10个最佳候选
+
+      return {
+        crown: {
+          gid: crown.gid,
+          league: crown.league_zh,
+          home: crown.home_zh,
+          away: crown.away_zh,
+          time: crown.match_time,
+        },
+        candidates,
+      };
+    });
+
+    res.json({
+      success: true,
+      crownCount: crownMatches.length,
+      isportsCount: mappedIsportsMatches.length,
+      debugResults,
+    });
+
+  } catch (error: any) {
+    logger.error('[MatchCompare Debug] 错误:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 /**
  * GET /api/match-compare
