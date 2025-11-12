@@ -12,8 +12,8 @@ import mappingRouter from './routes/mapping';
 import leagueMappingRouter from './routes/league-mapping';
 import thirdpartyRouter, { setThirdPartyManager } from './routes/thirdparty';
 import matchesRouter, { setScraperManager } from './routes/matches';
-import matchPushRouter, { setManagers } from './routes/match-push';
-import matchCompareRouter from './routes/match-compare';
+import matchPushRouter, { setManagers as setMatchPushManagers } from './routes/match-push';
+import matchCompareRouter, { setManagers as setMatchCompareManagers } from './routes/match-compare';
 import { testConnection, initDatabase, closeDatabase } from './config/database';
 
 // 加载环境变量
@@ -164,18 +164,17 @@ class Application {
    */
   private startThirdPartyManager(): void {
     const isportsApiKey = process.env.ISPORTS_API_KEY || 'GvpziueL9ouzIJNj';
-    const oddsapiApiKey = process.env.ODDSAPI_API_KEY || '17b831ef959c4e44e4c1e587ee60364ee91b3baac528894b83be1aa017d14620';
     const fetchInterval = parseInt(process.env.THIRDPARTY_FETCH_INTERVAL || '300'); // 默认 5 分钟
 
     this.thirdPartyManager = new ThirdPartyManager(
       isportsApiKey,
-      oddsapiApiKey,
       fetchInterval
     );
 
     // 设置到路由中
     setThirdPartyManager(this.thirdPartyManager);
-    setManagers(this.scraperManager, this.thirdPartyManager);
+    setMatchPushManagers(this.scraperManager, this.thirdPartyManager);
+    setMatchCompareManagers(this.scraperManager, this.thirdPartyManager);
 
     // 先加载缓存，然后再启动定时抓取
     this.thirdPartyManager.ensureCacheLoaded()

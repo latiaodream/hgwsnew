@@ -5,24 +5,25 @@
 
 import { Router, Request, Response } from 'express';
 import { Match, ShowType } from '../types';
+import { ThirdPartyManager } from '../scrapers/ThirdPartyManager';
+import { ISportsMatch } from '../scrapers/ISportsAPIScraper';
 import logger from '../utils/logger';
 import ExcelJS from 'exceljs';
 
-// iSports 赛事类型（临时定义，实际应该从 ThirdPartyManager 获取）
-interface ISportsMatch {
-  match_id: string;
-  league_name_en?: string;
-  league_name_cn?: string;
-  home_team_en?: string;
-  home_team_cn?: string;
-  away_team_en?: string;
-  away_team_cn?: string;
-  match_time: string;
-  status: string;
-  [key: string]: any;
-}
-
 const router = Router();
+
+// 全局管理器实例
+let scraperManager: any = null;
+let thirdPartyManager: ThirdPartyManager | null = null;
+
+/**
+ * 设置管理器实例
+ */
+export function setManagers(scraper: any, thirdParty: ThirdPartyManager) {
+  scraperManager = scraper;
+  thirdPartyManager = thirdParty;
+  logger.info('[MatchCompare] 管理器已设置');
+}
 
 // 临时存储手动匹配关系（实际应该存储到数据库）
 const manualMatches = new Map<string, string>(); // crownGid -> isportsMatchId
@@ -91,14 +92,14 @@ function aiMatch(crown: Match, isports: ISportsMatch): { matched: boolean; confi
 
   // 3. 主队名称相似度
   const homeSimilarity = Math.max(
-    calculateSimilarity(crown.home_zh, isports.home_team_cn || ''),
-    calculateSimilarity(crown.home_zh, isports.home_team_en || '')
+    calculateSimilarity(crown.home_zh, isports.team_home_cn || ''),
+    calculateSimilarity(crown.home_zh, isports.team_home_en || '')
   );
 
   // 4. 客队名称相似度
   const awaySimilarity = Math.max(
-    calculateSimilarity(crown.away_zh, isports.away_team_cn || ''),
-    calculateSimilarity(crown.away_zh, isports.away_team_en || '')
+    calculateSimilarity(crown.away_zh, isports.team_away_cn || ''),
+    calculateSimilarity(crown.away_zh, isports.team_away_en || '')
   );
 
   // 5. 综合评分
@@ -122,11 +123,20 @@ router.get('/', async (req: Request, res: Response) => {
   try {
     const { showType = 'live', timeRange = 'all' } = req.query;
 
+    if (!scraperManager || !thirdPartyManager) {
+      return res.status(503).json({
+        success: false,
+        error: '服务未初始化',
+      });
+    }
+
     // 获取皇冠赛事
-    const crownMatches: Match[] = (global as any).crownMatches?.get(showType as ShowType) || [];
+    const crownMatches: Match[] = scraperManager.getMatches(showType as ShowType);
+    logger.info(`[MatchCompare] 获取到 ${crownMatches.length} 场皇冠赛事`);
 
     // 获取 iSports 赛事
-    const isportsMatches: ISportsMatch[] = (global as any).isportsMatches || [];
+    const isportsMatches: ISportsMatch[] = thirdPartyManager.getISportsCachedData();
+    logger.info(`[MatchCompare] 获取到 ${isportsMatches.length} 场 iSports 赛事`);
 
     // 过滤时间范围
     let filteredCrown = crownMatches;
@@ -323,9 +333,16 @@ router.get('/export', async (req: Request, res: Response) => {
   try {
     const { showType = 'live', timeRange = 'all' } = req.query;
 
+    if (!scraperManager || !thirdPartyManager) {
+      return res.status(503).json({
+        success: false,
+        error: '服务未初始化',
+      });
+    }
+
     // 获取皇冠赛事
-    const crownMatches: Match[] = (global as any).crownMatches?.get(showType as ShowType) || [];
-    const isportsMatches: ISportsMatch[] = (global as any).isportsMatches || [];
+    const crownMatches: Match[] = scraperManager.getMatches(showType as ShowType);
+    const isportsMatches: ISportsMatch[] = thirdPartyManager.getISportsCachedData();
 
     // 过滤时间范围
     let filteredCrown = crownMatches;

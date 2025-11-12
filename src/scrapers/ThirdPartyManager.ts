@@ -1,14 +1,13 @@
 /**
  * 第三方 API 管理器
- * 
+ *
  * 功能：
- * - 管理 iSportsAPI 和 Odds-API.io 两个抓取器
+ * - 管理 iSportsAPI 抓取器
  * - 协调数据抓取和更新
  * - 提供统一的数据访问接口
  */
 
 import { ISportsAPIScraper, ISportsMatch } from './ISportsAPIScraper';
-import { OddsAPIScraper, OddsAPIMatch } from './OddsAPIScraper';
 import logger from '../utils/logger';
 import { getRedisClient } from '../utils/redisClient';
 import { ThirdpartyMatchRepository } from '../repositories/ThirdpartyMatchRepository';
@@ -16,16 +15,13 @@ import { EventEmitter } from 'events';
 
 export interface ThirdPartyData {
   isports: ISportsMatch[];
-  oddsapi: OddsAPIMatch[];
   last_update: {
     isports: string;
-    oddsapi: string;
   };
 }
 
 export class ThirdPartyManager extends EventEmitter {
   private isportsScraper: ISportsAPIScraper;
-  private oddsapiScraper: OddsAPIScraper;
   private fetchInterval: number;
   private intervalId?: NodeJS.Timeout;
   private isRunning: boolean = false;
@@ -33,24 +29,20 @@ export class ThirdPartyManager extends EventEmitter {
   private cacheLoadedFromRedis = false;
   private readonly redisKeys = {
     isports: 'thirdparty:isports',
-    oddsapi: 'thirdparty:oddsapi',
     lastUpdate: 'thirdparty:last_update',
   } as const;
-  private lastUpdate: Record<'isports' | 'oddsapi', string | null> = {
+  private lastUpdate: Record<'isports', string | null> = {
     isports: null,
-    oddsapi: null,
   };
   private thirdpartyMatchRepository: ThirdpartyMatchRepository;
   private useDatabase: boolean = true;
 
   constructor(
     isportsApiKey: string,
-    oddsapiApiKey: string,
     fetchIntervalSeconds: number = 60
   ) {
     super();
     this.isportsScraper = new ISportsAPIScraper(isportsApiKey);
-    this.oddsapiScraper = new OddsAPIScraper(oddsapiApiKey);
     this.fetchInterval = fetchIntervalSeconds * 1000;
     this.thirdpartyMatchRepository = new ThirdpartyMatchRepository();
 
@@ -109,57 +101,24 @@ export class ThirdPartyManager extends EventEmitter {
     const startTime = Date.now();
 
     try {
-      // 并行抓取两个 API 的数据
-      const [isportsMatches, oddsapiMatches] = await Promise.allSettled([
-        this.isportsScraper.fetchAllMatches(),
-        this.oddsapiScraper.fetchAllMatches(),
-      ]);
-
-      const isportsData =
-        isportsMatches.status === 'fulfilled'
-          ? isportsMatches.value
-          : this.isportsScraper.getAllMatches();
-      const oddsapiData =
-        oddsapiMatches.status === 'fulfilled'
-          ? oddsapiMatches.value
-          : this.oddsapiScraper.getMatchesCache();
-
-      if (isportsMatches.status === 'rejected') {
-        logger.warn(
-          `[ThirdPartyManager] iSportsAPI 抓取失败，使用缓存数据 (${isportsData.length} 场)`
-        );
-      }
-
-      if (oddsapiMatches.status === 'rejected') {
-        logger.warn(
-          `[ThirdPartyManager] OddsAPI 抓取失败，使用缓存数据 (${oddsapiData.length} 场)`
-        );
-      }
+      // 抓取 iSportsAPI 数据
+      const isportsMatches = await this.isportsScraper.fetchAllMatches();
+      const isportsData = isportsMatches;
 
       const data: ThirdPartyData = {
         isports: isportsData,
-        oddsapi: oddsapiData,
         last_update: {
           isports: this.lastUpdate.isports || new Date().toISOString(),
-          oddsapi: this.lastUpdate.oddsapi || new Date().toISOString(),
         },
       };
 
-      if (isportsMatches.status === 'fulfilled') {
-        await this.persistMatchesToRedis('isports', isportsData);
-        data.last_update.isports = this.lastUpdate.isports!;
-      }
-
-      if (oddsapiMatches.status === 'fulfilled') {
-        await this.persistMatchesToRedis('oddsapi', oddsapiData);
-        data.last_update.oddsapi = this.lastUpdate.oddsapi!;
-      }
+      await this.persistMatchesToRedis('isports', isportsData);
+      data.last_update.isports = this.lastUpdate.isports!;
 
       const duration = Date.now() - startTime;
       logger.info(
         `[ThirdPartyManager] 抓取完成 (${duration}ms): ` +
-        `iSports ${data.isports.length} 场, ` +
-        `OddsAPI ${data.oddsapi.length} 场`
+        `iSports ${data.isports.length} 场`
       );
 
       return data;
@@ -186,31 +145,13 @@ export class ThirdPartyManager extends EventEmitter {
   }
 
   /**
-   * 只抓取 Odds-API.io 数据
-   */
-  async fetchOddsAPI(): Promise<OddsAPIMatch[]> {
-    try {
-      logger.info('[ThirdPartyManager] 抓取 Odds-API.io 数据...');
-      const matches = await this.oddsapiScraper.fetchAllMatches();
-      logger.info(`[ThirdPartyManager] Odds-API.io 抓取完成: ${matches.length} 场`);
-      await this.persistMatchesToRedis('oddsapi', matches);
-      return matches;
-    } catch (error: any) {
-      logger.error('[ThirdPartyManager] Odds-API.io 抓取失败:', error.message);
-      throw error;
-    }
-  }
-
-  /**
    * 获取缓存的所有数据
    */
   getCachedData(): ThirdPartyData {
     return {
       isports: this.isportsScraper.getAllMatches(),
-      oddsapi: this.oddsapiScraper.getMatchesCache(),
       last_update: {
         isports: this.lastUpdate.isports || new Date().toISOString(),
-        oddsapi: this.lastUpdate.oddsapi || new Date().toISOString(),
       },
     };
   }
@@ -226,24 +167,10 @@ export class ThirdPartyManager extends EventEmitter {
   }
 
   /**
-   * 获取 Odds-API.io 缓存数据
-   */
-  getOddsAPICachedData(): OddsAPIMatch[] {
-    return this.oddsapiScraper.getMatchesCache();
-  }
-
-  /**
    * 根据 ID 获取 iSportsAPI 赛事
    */
   getISportsMatchById(matchId: string): ISportsMatch | undefined {
     return this.isportsScraper.getMatchById(matchId);
-  }
-
-  /**
-   * 根据 ID 获取 Odds-API.io 赛事
-   */
-  getOddsAPIMatchById(matchId: string): OddsAPIMatch | undefined {
-    return this.oddsapiScraper.getMatchById(matchId);
   }
 
   /**
@@ -252,10 +179,8 @@ export class ThirdPartyManager extends EventEmitter {
   getAllData(): ThirdPartyData {
     return {
       isports: this.isportsScraper.getAllMatches(),
-      oddsapi: this.oddsapiScraper.getMatchesCache(),
       last_update: {
         isports: this.lastUpdate.isports || new Date().toISOString(),
-        oddsapi: this.lastUpdate.oddsapi || new Date().toISOString(),
       },
     };
   }
@@ -267,13 +192,11 @@ export class ThirdPartyManager extends EventEmitter {
     isRunning: boolean;
     fetchInterval: number;
     isportsCount: number;
-    oddsapiCount: number;
   } {
     return {
       isRunning: this.isRunning,
       fetchInterval: this.fetchInterval,
       isportsCount: this.isportsScraper.getAllMatches().length,
-      oddsapiCount: this.oddsapiScraper.getMatchesCache().length,
     };
   }
 
@@ -295,9 +218,8 @@ export class ThirdPartyManager extends EventEmitter {
     }
 
     try {
-      const [isportsRaw, oddsapiRaw, lastUpdateRaw] = await Promise.all([
+      const [isportsRaw, lastUpdateRaw] = await Promise.all([
         this.redisClient.get(this.redisKeys.isports),
-        this.redisClient.get(this.redisKeys.oddsapi),
         this.redisClient.hgetall(this.redisKeys.lastUpdate),
       ]);
 
@@ -307,18 +229,8 @@ export class ThirdPartyManager extends EventEmitter {
         logger.info(`[ThirdPartyManager] 从 Redis 恢复 iSports ${matches.length} 场赛事`);
       }
 
-      if (oddsapiRaw) {
-        const matches = JSON.parse(oddsapiRaw) as OddsAPIMatch[];
-        this.oddsapiScraper.hydrateCache(matches);
-        logger.info(`[ThirdPartyManager] 从 Redis 恢复 OddsAPI ${matches.length} 场赛事`);
-      }
-
       if (lastUpdateRaw?.isports) {
         this.lastUpdate.isports = lastUpdateRaw.isports;
-      }
-
-      if (lastUpdateRaw?.oddsapi) {
-        this.lastUpdate.oddsapi = lastUpdateRaw.oddsapi;
       }
 
       this.cacheLoadedFromRedis = true;
@@ -328,8 +240,8 @@ export class ThirdPartyManager extends EventEmitter {
   }
 
   private async persistMatchesToRedis(
-    source: 'isports' | 'oddsapi',
-    matches: ISportsMatch[] | OddsAPIMatch[]
+    source: 'isports',
+    matches: ISportsMatch[]
   ): Promise<void> {
     const timestamp = new Date().toISOString();
     this.lastUpdate[source] = timestamp;
@@ -371,47 +283,27 @@ export class ThirdPartyManager extends EventEmitter {
    * 转换为数据库格式
    */
   private convertToDbFormat(
-    source: 'isports' | 'oddsapi',
-    matches: ISportsMatch[] | OddsAPIMatch[]
+    source: 'isports',
+    matches: ISportsMatch[]
   ): any[] {
     return matches.map(match => {
-      if (source === 'isports') {
-        const m = match as ISportsMatch;
-        return {
-          id: `isports_${m.match_id}`,
-          source: 'isports',
-          status: m.status === 'live' ? 'live' : 'upcoming',
-          league_en: m.league_name_en,
-          league_cn: m.league_name_cn,
-          team_home_en: m.team_home_en,
-          team_home_cn: m.team_home_cn,
-          team_away_en: m.team_away_en,
-          team_away_cn: m.team_away_cn,
-          match_time: m.match_time,
-          handicap: m.odds.handicap || [],
-          totals: m.odds.totals || [],
-          moneyline: m.odds.moneyline || null,
-          raw_data: m,
-        };
-      } else {
-        const m = match as OddsAPIMatch;
-        return {
-          id: `oddsapi_${m.match_id}`,
-          source: 'oddsapi',
-          status: m.status === 'live' ? 'live' : 'upcoming',
-          league_en: m.league_name_en,
-          league_cn: m.league_name_cn,
-          team_home_en: m.team_home_en,
-          team_home_cn: m.team_home_cn,
-          team_away_en: m.team_away_en,
-          team_away_cn: m.team_away_cn,
-          match_time: m.match_time,
-          handicap: m.odds.handicap || null,
-          totals: m.odds.totals || null,
-          moneyline: m.odds.moneyline || null,
-          raw_data: m,
-        };
-      }
+      const m = match as ISportsMatch;
+      return {
+        id: `isports_${m.match_id}`,
+        source: 'isports',
+        status: m.status === 'live' ? 'live' : 'upcoming',
+        league_en: m.league_name_en,
+        league_cn: m.league_name_cn,
+        team_home_en: m.team_home_en,
+        team_home_cn: m.team_home_cn,
+        team_away_en: m.team_away_en,
+        team_away_cn: m.team_away_cn,
+        match_time: m.match_time,
+        handicap: m.odds.handicap || [],
+        totals: m.odds.totals || [],
+        moneyline: m.odds.moneyline || null,
+        raw_data: m,
+      };
     });
   }
 }

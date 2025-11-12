@@ -254,18 +254,7 @@ export class WSServer {
         });
       }
 
-      if (thirdpartySources.includes('oddsapi')) {
-        this.sendMessage(client, {
-          type: MessageType.THIRDPARTY_FULL_DATA,
-          data: {
-            source: 'oddsapi',
-            matches: thirdpartyData.oddsapi,
-            count: thirdpartyData.oddsapi.length,
-            last_update: thirdpartyData.last_update.oddsapi,
-          },
-          timestamp: Date.now(),
-        });
-      }
+
 
       logger.info(`客户端订阅: ${client.id}, 类型: ${showTypes.join(', ')}, 第三方: ${thirdpartySources.join(', ')}`);
     } else {
