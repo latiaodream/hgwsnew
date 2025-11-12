@@ -14,12 +14,48 @@ export class LeagueMappingManager {
   private mappings: Map<string, LeagueMapping> = new Map();
   private repository: LeagueMappingRepository;
   private useDatabase: boolean;
+  private cacheLoaded: boolean = false;
+  private cacheLoadPromise: Promise<void> | null = null;
 
   constructor(mappingFilePath?: string, useDatabase: boolean = true) {
     this.mappingFilePath = mappingFilePath || path.join(process.cwd(), 'data', 'league-mapping.json');
     this.useDatabase = useDatabase;
     this.repository = new LeagueMappingRepository();
     this.loadMappings();
+  }
+
+  /**
+   * 确保缓存已加载
+   */
+  private async ensureCacheLoaded(): Promise<void> {
+    if (this.cacheLoaded) {
+      return;
+    }
+
+    // 如果正在加载，等待加载完成
+    if (this.cacheLoadPromise) {
+      return this.cacheLoadPromise;
+    }
+
+    // 开始加载
+    this.cacheLoadPromise = (async () => {
+      try {
+        if (this.useDatabase) {
+          const mappings = await this.repository.findAll();
+          this.mappings.clear();
+          mappings.forEach(m => this.mappings.set(m.id, m));
+          logger.info(`[LeagueMappingManager] 从数据库加载 ${mappings.length} 条映射到缓存`);
+        }
+        this.cacheLoaded = true;
+      } catch (error: any) {
+        logger.error('[LeagueMappingManager] 加载缓存失败:', error.message);
+        throw error;
+      } finally {
+        this.cacheLoadPromise = null;
+      }
+    })();
+
+    return this.cacheLoadPromise;
   }
 
   /**
@@ -309,9 +345,10 @@ export class LeagueMappingManager {
    */
   async findMappingByISportsName(isportsEn: string, isportsCn: string): Promise<LeagueMapping | null> {
     if (this.useDatabase) {
-      // 从数据库查找
-      const all = await this.repository.findAll();
-      return all.find((m: LeagueMapping) =>
+      // 确保缓存已加载
+      await this.ensureCacheLoaded();
+      // 从缓存查找
+      return Array.from(this.mappings.values()).find(m =>
         m.isports_en === isportsEn || m.isports_cn === isportsCn
       ) || null;
     } else {
@@ -320,6 +357,14 @@ export class LeagueMappingManager {
         m.isports_en === isportsEn || m.isports_cn === isportsCn
       ) || null;
     }
+  }
+
+  /**
+   * 清除缓存（在数据更新后调用）
+   */
+  clearCache(): void {
+    this.cacheLoaded = false;
+    logger.info('[LeagueMappingManager] 缓存已清除');
   }
 }
 
