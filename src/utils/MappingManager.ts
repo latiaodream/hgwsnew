@@ -230,6 +230,10 @@ export class MappingManager {
 
       await this.repository.createBatch(fullMappings);
       fullMappings.forEach(m => this.mappings.set(m.id, m));
+
+      // 清除缓存，强制下次查询时重新加载
+      this.clearCache();
+
       logger.info(`[MappingManager] 批量导入 ${fullMappings.length} 条映射到数据库`);
       return fullMappings;
     } else {
