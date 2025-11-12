@@ -8,25 +8,49 @@ const logger = require('./dist/utils/logger').default;
 const fs = require('fs');
 
 async function testHistoryDates() {
-  // 尝试从 config.json 读取账号，如果不存在则使用默认账号
+  // 优先级：命令行参数 > config.json > 环境变量 > 默认值
   let account;
 
-  try {
-    const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
-    account = config.accounts.find(a => a.showType === 'early');
-    logger.info(`从 config.json 读取账号: ${account.username}`);
-  } catch (error) {
-    // 如果没有 config.json，使用默认测试账号
-    logger.warn('未找到 config.json，使用默认测试账号');
+  // 1. 尝试从命令行参数读取
+  const args = process.argv.slice(2);
+  if (args.length >= 2) {
     account = {
-      username: 'cppzuqx4',
-      password: 'aa112211',
+      username: args[0],
+      password: args[1],
       showType: 'early',
     };
+    logger.info(`使用命令行参数账号: ${account.username}`);
+  }
+  // 2. 尝试从 config.json 读取
+  else {
+    try {
+      const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
+      account = config.accounts.find(a => a.showType === 'early');
+      if (account) {
+        logger.info(`从 config.json 读取账号: ${account.username}`);
+      }
+    } catch (error) {
+      // 忽略错误，继续尝试其他方式
+    }
   }
 
+  // 3. 尝试从环境变量读取
+  if (!account && process.env.CROWN_USERNAME && process.env.CROWN_PASSWORD) {
+    account = {
+      username: process.env.CROWN_USERNAME,
+      password: process.env.CROWN_PASSWORD,
+      showType: 'early',
+    };
+    logger.info(`从环境变量读取账号: ${account.username}`);
+  }
+
+  // 4. 使用默认测试账号
   if (!account) {
-    logger.error('未找到可用的账号');
+    logger.error('未找到账号信息！');
+    logger.error('请使用以下方式之一提供账号：');
+    logger.error('  1. 命令行参数: node test-history-dates.js <username> <password>');
+    logger.error('  2. 环境变量: CROWN_USERNAME=xxx CROWN_PASSWORD=xxx node test-history-dates.js');
+    logger.error('  3. 创建 config.json 文件');
     return;
   }
 
