@@ -339,13 +339,23 @@ router.post('/import-excel', upload.single('file'), async (req: Request, res: Re
       }
 
       const isports_en = row[0]?.toString().trim();
-      const isports_cn = row[1]?.toString().trim();
-      const crown_cn = row[2]?.toString().trim();
+      const isports_cn = row[1]?.toString().trim() || '';
+      const crown_cn = row[2]?.toString().trim() || '';
 
-      if (!isports_en || !isports_cn || !crown_cn) {
+      // 至少需要 isports_en 和 crown_cn
+      if (!isports_en) {
         errors.push({
           row: i + 1,
-          error: '缺少必要字段',
+          error: '缺少 isports_en 字段',
+          data: row,
+        });
+        continue;
+      }
+
+      if (!crown_cn) {
+        errors.push({
+          row: i + 1,
+          error: '缺少 crown_cn 字段（请填写翻译）',
           data: row,
         });
         continue;
