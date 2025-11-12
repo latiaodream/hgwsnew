@@ -4,15 +4,29 @@
  */
 
 const { CrownScraper } = require('./dist/scrapers/CrownScraper');
-const config = require('./config.json');
 const logger = require('./dist/utils/logger').default;
+const fs = require('fs');
 
 async function testHistoryDates() {
-  // 使用 early 类型的账号
-  const account = config.accounts.find(a => a.showType === 'early');
-  
+  // 尝试从 config.json 读取账号，如果不存在则使用默认账号
+  let account;
+
+  try {
+    const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
+    account = config.accounts.find(a => a.showType === 'early');
+    logger.info(`从 config.json 读取账号: ${account.username}`);
+  } catch (error) {
+    // 如果没有 config.json，使用默认测试账号
+    logger.warn('未找到 config.json，使用默认测试账号');
+    account = {
+      username: 'cppzuqx4',
+      password: 'aa112211',
+      showType: 'early',
+    };
+  }
+
   if (!account) {
-    logger.error('未找到 early 类型的账号');
+    logger.error('未找到可用的账号');
     return;
   }
 
