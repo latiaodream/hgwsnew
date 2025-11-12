@@ -3579,11 +3579,9 @@
                   <i class="ri-link-unlink"></i> 取消匹配
                 </button>
               `}
-              ${canSaveMapping ? `
-                <button class="btn btn-sm btn-success" data-payload="${mappingPayload}" onclick="saveMappingFromMatch(this)" style="margin-left: 10px;">
-                  <i class="ri-database-2-line"></i> 一键入库
-                </button>
-              ` : ''}
+              <button class="btn btn-sm btn-success" ${canSaveMapping ? `data-payload="${mappingPayload}" onclick="saveMappingFromMatch(this)"` : 'disabled title="需先完成匹配才可入库"'} style="margin-left: 10px; opacity: ${canSaveMapping ? 1 : 0.6}; cursor: ${canSaveMapping ? 'pointer' : 'not-allowed'};">
+                <i class="ri-database-2-line"></i> 一键入库
+              </button>
             </div>
           </div>
 
