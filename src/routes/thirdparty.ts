@@ -460,8 +460,10 @@ router.get('/export-teams-excel', async (req: Request, res: Response) => {
       })
       .sort((a, b) => a.isports_en.localeCompare(b.isports_en));
 
-    // 创建 Excel 工作簿
-    const worksheet = XLSX.utils.json_to_sheet(teams);
+    // 创建 Excel 工作簿，明确指定表头
+    const worksheet = XLSX.utils.json_to_sheet(teams, {
+      header: ['isports_en', 'isports_cn', 'crown_cn'],
+    });
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Teams');
 
@@ -520,8 +522,10 @@ router.get('/export-leagues-excel', async (req: Request, res: Response) => {
       })
       .sort((a, b) => a.isports_en.localeCompare(b.isports_en));
 
-    // 创建 Excel 工作簿
-    const worksheet = XLSX.utils.json_to_sheet(leagues);
+    // 创建 Excel 工作簿，明确指定表头
+    const worksheet = XLSX.utils.json_to_sheet(leagues, {
+      header: ['isports_en', 'isports_cn', 'crown_cn'],
+    });
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Leagues');
 

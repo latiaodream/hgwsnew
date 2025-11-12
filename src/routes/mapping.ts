@@ -292,8 +292,16 @@ router.post('/teams/import-excel', upload.single('file'), async (req: Request, r
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
 
-    // 转换为 JSON，跳过表头
+    // 转换为 JSON，使用第一行作为表头
     const data: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+    logger.info(`[API] Excel 文件总行数: ${data.length}`);
+    if (data.length > 0) {
+      logger.info(`[API] 第一行（表头）: ${JSON.stringify(data[0])}`);
+      if (data.length > 1) {
+        logger.info(`[API] 第二行（数据示例）: ${JSON.stringify(data[1])}`);
+      }
+    }
 
     if (data.length < 2) {
       return res.status(400).json({
@@ -311,12 +319,15 @@ router.post('/teams/import-excel', upload.single('file'), async (req: Request, r
 
       // 跳过空行
       if (!row || row.length === 0 || !row[0]) {
+        logger.debug(`[API] 跳过空行: 第 ${i + 1} 行`);
         continue;
       }
 
       const isports_en = row[0]?.toString().trim();
       const isports_cn = row[1]?.toString().trim() || '';
       const crown_cn = row[2]?.toString().trim() || '';
+
+      logger.debug(`[API] 解析第 ${i + 1} 行: isports_en="${isports_en}", isports_cn="${isports_cn}", crown_cn="${crown_cn}"`);
 
       // 至少需要 isports_en 和 crown_cn
       if (!isports_en) {

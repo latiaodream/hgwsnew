@@ -2675,25 +2675,24 @@
     // 导出球队信息（用于翻译）- Excel 格式
     async function exportTeams() {
       try {
-        const res = await fetch('/api/thirdparty/export-teams');
-        const data = await res.json();
+        // 直接下载 Excel 文件
+        const excelRes = await fetch('/api/thirdparty/export-teams-excel');
 
-        if (data.success) {
-          // 使用后端生成 Excel 文件
-          const excelRes = await fetch('/api/thirdparty/export-teams-excel');
-          const blob = await excelRes.blob();
-
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = `teams-export-${new Date().toISOString().split('T')[0]}.xlsx`;
-          link.click();
-          URL.revokeObjectURL(url);
-
-          alert(`导出成功！共导出 ${data.count} 个球队`);
-        } else {
-          alert('导出失败: ' + data.error);
+        if (!excelRes.ok) {
+          const errorData = await excelRes.json();
+          alert('导出失败: ' + (errorData.error || '未知错误'));
+          return;
         }
+
+        const blob = await excelRes.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `teams-export-${new Date().toISOString().split('T')[0]}.xlsx`;
+        link.click();
+        URL.revokeObjectURL(url);
+
+        alert('导出成功！请在 Excel 中填写 crown_cn 列后导入');
       } catch (error) {
         alert('导出失败: ' + error.message);
       }
@@ -2702,25 +2701,24 @@
     // 导出联赛信息（用于翻译）- Excel 格式
     async function exportLeagues() {
       try {
-        const res = await fetch('/api/thirdparty/export-leagues');
-        const data = await res.json();
+        // 直接下载 Excel 文件
+        const excelRes = await fetch('/api/thirdparty/export-leagues-excel');
 
-        if (data.success) {
-          // 使用后端生成 Excel 文件
-          const excelRes = await fetch('/api/thirdparty/export-leagues-excel');
-          const blob = await excelRes.blob();
-
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = `leagues-export-${new Date().toISOString().split('T')[0]}.xlsx`;
-          link.click();
-          URL.revokeObjectURL(url);
-
-          alert(`导出成功！共导出 ${data.count} 个联赛`);
-        } else {
-          alert('导出失败: ' + data.error);
+        if (!excelRes.ok) {
+          const errorData = await excelRes.json();
+          alert('导出失败: ' + (errorData.error || '未知错误'));
+          return;
         }
+
+        const blob = await excelRes.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `leagues-export-${new Date().toISOString().split('T')[0]}.xlsx`;
+        link.click();
+        URL.revokeObjectURL(url);
+
+        alert('导出成功！请在 Excel 中填写 crown_cn 列后导入');
       } catch (error) {
         alert('导出失败: ' + error.message);
       }
