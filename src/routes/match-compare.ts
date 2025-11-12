@@ -18,6 +18,25 @@ const leagueMappingManager = new LeagueMappingManager();
 
 const router = Router();
 
+const ISPORTS_STATUS_BY_SHOWTYPE: Record<ShowType, ISportsMatch['status'][]> = {
+  live: ['live'],
+  today: ['today'],
+  early: ['early'],
+};
+
+const TIME_DIFF_LIMIT_MINUTES: Record<ShowType, number> = {
+  live: 30,
+  today: 24 * 60,
+  early: 7 * 24 * 60,
+};
+
+function normalizeShowType(value: any): ShowType {
+  if (value === 'today' || value === 'early') {
+    return value;
+  }
+  return 'live';
+}
+
 // 全局管理器实例
 let scraperManager: any = null;
 let thirdPartyManager: ThirdPartyManager | null = null;
@@ -148,10 +167,16 @@ function getTimeDiff(time1: string, time2: string): number {
  * 新规则：时间一样（30分钟内），联赛名称相似度 >= 20% 就匹配
  * 增强：使用繁体字进行匹配
  */
-function aiMatch(crown: Match, isports: ISportsMatch, debug: boolean = false): { matched: boolean; confidence: number; timeDiff: number; debugInfo?: any } {
-  // 1. 时间差必须在 30 分钟内
+function aiMatch(
+  crown: Match,
+  isports: ISportsMatch,
+  options: { debug?: boolean; maxTimeDiffMinutes?: number } = {}
+): { matched: boolean; confidence: number; timeDiff: number; debugInfo?: any } {
+  const { debug = false, maxTimeDiffMinutes = 30 } = options;
+
+  // 1. 时间差控制
   const timeDiff = getTimeDiff(crown.match_time, isports.match_time);
-  if (timeDiff > 30) {
+  if (timeDiff > maxTimeDiffMinutes) {
     return { matched: false, confidence: 0, timeDiff };
   }
 
@@ -198,7 +223,6 @@ function aiMatch(crown: Match, isports: ISportsMatch, debug: boolean = false): {
 
   const result: any = { matched, confidence, timeDiff };
 
-  // 调试信息
   if (debug) {
     result.debugInfo = {
       crown: {
@@ -243,7 +267,7 @@ router.get('/debug', async (req: Request, res: Response) => {
       return res.status(500).json({ error: '管理器未初始化' });
     }
 
-    const showType = (req.query.showType as string) || 'live';
+    const showType = normalizeShowType(req.query.showType as string);
 
     // 获取皇冠赛事
     const crownMatches = scraperManager.getMatches().filter((m: Match) => m.showType === showType);
@@ -262,7 +286,10 @@ router.get('/debug', async (req: Request, res: Response) => {
     const debugResults = crownMatches.slice(0, 5).map((crown: Match) => {
       // 找出所有可能的匹配
       const candidates = mappedIsportsMatches.map((isports: ISportsMatch) => {
-        const result = aiMatch(crown, isports, true);
+        const result = aiMatch(crown, isports, {
+          debug: true,
+          maxTimeDiffMinutes: TIME_DIFF_LIMIT_MINUTES[showType as ShowType] || 30,
+        });
         return {
           isports: {
             match_id: isports.match_id,
@@ -306,7 +333,8 @@ router.get('/debug', async (req: Request, res: Response) => {
  */
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const { showType = 'live', timeRange = 'all' } = req.query;
+    const showType = normalizeShowType(req.query.showType as string);
+    const timeRange = (req.query.timeRange as string) || 'all';
 
     if (!scraperManager || !thirdPartyManager) {
       return res.status(503).json({
@@ -316,12 +344,17 @@ router.get('/', async (req: Request, res: Response) => {
     }
 
     // 获取皇冠赛事
-    const crownMatches: Match[] = scraperManager.getMatches(showType as ShowType);
+    const crownMatches: Match[] = scraperManager.getMatches(showType);
     logger.info(`[MatchCompare] 获取到 ${crownMatches.length} 场皇冠赛事`);
 
     // 获取 iSports 赛事并应用映射
-    const rawIsportsMatches: ISportsMatch[] = thirdPartyManager.getISportsCachedData();
-    logger.info(`[MatchCompare] 获取到 ${rawIsportsMatches.length} 场 iSports 赛事`);
+    const statusFilter = ISPORTS_STATUS_BY_SHOWTYPE[showType] || ['live', 'today', 'early'];
+    const rawIsportsMatches: ISportsMatch[] = thirdPartyManager
+      .getISportsCachedData()
+      .filter(match => statusFilter.includes(match.status));
+    logger.info(
+      `[MatchCompare] 获取到 ${rawIsportsMatches.length} 场 iSports 赛事 (showType=${showType})`
+    );
 
     // 应用映射到所有 iSports 赛事
     const isportsMatches = await Promise.all(
@@ -360,6 +393,7 @@ router.get('/', async (req: Request, res: Response) => {
     const matchedCrown = new Set<string>();
     const matchedIsports = new Set<string>();
     const results: any[] = [];
+    const maxTimeDiffMinutes = TIME_DIFF_LIMIT_MINUTES[showType] || 30;
 
     // 1. 处理手动匹配
     for (const crown of filteredCrown) {
@@ -391,7 +425,7 @@ router.get('/', async (req: Request, res: Response) => {
       for (const isports of filteredIsports) {
         if (matchedIsports.has(isports.match_id)) continue;
 
-        const { matched, confidence, timeDiff } = aiMatch(crown, isports);
+        const { matched, confidence, timeDiff } = aiMatch(crown, isports, { maxTimeDiffMinutes });
         if (matched && confidence > bestConfidence) {
           bestMatch = isports;
           bestConfidence = confidence;

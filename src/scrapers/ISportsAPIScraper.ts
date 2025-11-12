@@ -306,11 +306,8 @@ export class ISportsAPIScraper {
             const matchTimeMs = detail.matchTime * 1000;
             const matchDateUTC = new Date(matchTimeMs);
 
-            // iSports API 返回的时间戳减去 8 小时（UTC 转为 GMT-4 的显示时间）
-            // 例如：API 返回 UTC 15:00，减 8 小时得到 07:00
-            // 存储为 07:00-04:00，解析为 Date 对象是 UTC 11:00
-            // 前端加 4 小时后显示 15:00
-            const adjustedDate = new Date(matchTimeMs - 8 * 60 * 60 * 1000);
+            // iSports API 返回的是 UTC 时间戳，这里减去 4 小时得到 GMT-4
+            const adjustedDate = new Date(matchTimeMs - 4 * 60 * 60 * 1000);
 
             const year = adjustedDate.getUTCFullYear();
             const month = String(adjustedDate.getUTCMonth() + 1).padStart(2, '0');
