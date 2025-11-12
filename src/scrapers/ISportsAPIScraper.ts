@@ -186,36 +186,39 @@ export class ISportsAPIScraper {
             match.team_away_cn = detail.awayName;
             match.team_away_en = detail.awayName;
 
-            // iSportsAPI 返回的时间戳是 UTC 时间，我们需要将其解释为 GMT-4（美东时间）
-            // 方法：将 UTC 时间戳直接构造为 GMT-4 的 ISO 字符串
+            // iSportsAPI 返回的时间戳是 UTC 时间，需要转换为 GMT-4（美东时间）
+            // UTC 时间 - 4小时 = GMT-4 时间
             const matchTimeMs = detail.matchTime * 1000;
-            const matchDate = new Date(matchTimeMs);
+            const matchDateUTC = new Date(matchTimeMs);
+
+            // 减去 4 小时得到 GMT-4 时间
+            const matchDateGMT4 = new Date(matchTimeMs - 4 * 60 * 60 * 1000);
 
             // 构造 GMT-4 时间字符串（格式：YYYY-MM-DDTHH:mm:ss-04:00）
-            const year = matchDate.getUTCFullYear();
-            const month = String(matchDate.getUTCMonth() + 1).padStart(2, '0');
-            const day = String(matchDate.getUTCDate()).padStart(2, '0');
-            const hour = String(matchDate.getUTCHours()).padStart(2, '0');
-            const minute = String(matchDate.getUTCMinutes()).padStart(2, '0');
-            const second = String(matchDate.getUTCSeconds()).padStart(2, '0');
+            const year = matchDateGMT4.getUTCFullYear();
+            const month = String(matchDateGMT4.getUTCMonth() + 1).padStart(2, '0');
+            const day = String(matchDateGMT4.getUTCDate()).padStart(2, '0');
+            const hour = String(matchDateGMT4.getUTCHours()).padStart(2, '0');
+            const minute = String(matchDateGMT4.getUTCMinutes()).padStart(2, '0');
+            const second = String(matchDateGMT4.getUTCSeconds()).padStart(2, '0');
 
             match.match_time = `${year}-${month}-${day}T${hour}:${minute}:${second}-04:00`;
 
             // 根据比赛时间和状态判断类型（使用 GMT-4 时间）
             const now = new Date();
             const nowGMT4 = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-            const matchTimeGMT4 = new Date(matchDate.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+            const matchTimeGMT4ForComparison = new Date(matchDateUTC.toLocaleString('en-US', { timeZone: 'America/New_York' }));
             const todayEndGMT4 = new Date(nowGMT4);
             todayEndGMT4.setHours(23, 59, 59, 999);
 
             // 计算比赛开始时间与当前时间的差值（分钟）
-            const timeDiffMinutes = (matchTimeGMT4.getTime() - nowGMT4.getTime()) / (1000 * 60);
+            const timeDiffMinutes = (matchTimeGMT4ForComparison.getTime() - nowGMT4.getTime()) / (1000 * 60);
 
             if (detail.status > 0 && timeDiffMinutes <= 15) {
               // status > 0 且比赛时间已到（或提前15分钟内）才标记为滚球
               // 这样可以避免 API 数据错误导致未开始的比赛被标记为滚球
               match.status = 'live';
-            } else if (matchTimeGMT4 <= todayEndGMT4) {
+            } else if (matchTimeGMT4ForComparison <= todayEndGMT4) {
               match.status = 'today';
             } else {
               // 明日及以后的赛事都归为早盘
