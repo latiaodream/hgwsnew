@@ -95,10 +95,15 @@ export class ISportsAPIScraper {
         if (data.leagues) {
           let leagueCount = 0;
           data.leagues.forEach((league: any) => {
-            this.tcLanguageCache.set(`league_${league.leagueId}`, league.name_tc);
+            // 确保 ID 转换为字符串
+            const leagueId = String(league.leagueId);
+            this.tcLanguageCache.set(`league_${leagueId}`, league.name_tc);
             leagueCount++;
           });
           logger.info(`[ISportsAPI] 缓存了 ${leagueCount} 个联赛繁体名称`);
+          // 显示前几个示例
+          const examples = data.leagues.slice(0, 3).map((l: any) => `${l.leagueId}:${l.name_tc}`).join(', ');
+          logger.info(`[ISportsAPI] 联赛示例: ${examples}`);
         } else {
           logger.warn('[ISportsAPI] 繁体语言包中没有 leagues 字段');
         }
@@ -107,10 +112,15 @@ export class ISportsAPIScraper {
         if (data.teams) {
           let teamCount = 0;
           data.teams.forEach((team: any) => {
-            this.tcLanguageCache.set(`team_${team.teamId}`, team.name_tc);
+            // 确保 ID 转换为字符串
+            const teamId = String(team.teamId);
+            this.tcLanguageCache.set(`team_${teamId}`, team.name_tc);
             teamCount++;
           });
           logger.info(`[ISportsAPI] 缓存了 ${teamCount} 个球队繁体名称`);
+          // 显示前几个示例
+          const examples = data.teams.slice(0, 3).map((t: any) => `${t.teamId}:${t.name_tc}`).join(', ');
+          logger.info(`[ISportsAPI] 球队示例: ${examples}`);
         } else {
           logger.warn('[ISportsAPI] 繁体语言包中没有 teams 字段');
         }
@@ -125,8 +135,10 @@ export class ISportsAPIScraper {
   /**
    * 获取繁体中文名称
    */
-  private getTCName(type: 'league' | 'team', id: string): string | undefined {
-    return this.tcLanguageCache.get(`${type}_${id}`);
+  private getTCName(type: 'league' | 'team', id: string | number): string | undefined {
+    // 确保 ID 转换为字符串
+    const idStr = String(id);
+    return this.tcLanguageCache.get(`${type}_${idStr}`);
   }
 
   /**
@@ -160,6 +172,7 @@ export class ISportsAPIScraper {
       let leagueTCCount = 0;
       let teamHomeTCCount = 0;
       let teamAwayTCCount = 0;
+      let firstMatchLogged = false;
 
       allMatches.forEach(match => {
         // 添加繁体中文名称
@@ -173,6 +186,19 @@ export class ISportsAPIScraper {
         if (match.team_away_id) {
           match.team_away_tc = this.getTCName('team', match.team_away_id);
           if (match.team_away_tc) teamAwayTCCount++;
+        }
+
+        // 记录第一场赛事的详细信息用于调试
+        if (!firstMatchLogged) {
+          logger.info(`[ISportsAPI] 第一场赛事调试信息:`);
+          logger.info(`  - league_id: ${match.league_id} (类型: ${typeof match.league_id})`);
+          logger.info(`  - league_name_cn: ${match.league_name_cn}`);
+          logger.info(`  - league_name_tc: ${match.league_name_tc || '未找到'}`);
+          logger.info(`  - team_home_id: ${match.team_home_id} (类型: ${typeof match.team_home_id})`);
+          logger.info(`  - team_home_cn: ${match.team_home_cn}`);
+          logger.info(`  - team_home_tc: ${match.team_home_tc || '未找到'}`);
+          logger.info(`  - 缓存 key 查询: league_${String(match.league_id)}, team_${String(match.team_home_id)}`);
+          firstMatchLogged = true;
         }
 
         this.matchesCache.set(match.match_id, match);
