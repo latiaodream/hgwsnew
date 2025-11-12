@@ -29,11 +29,22 @@ const leagueMappingManager = new LeagueMappingManager();
 
 /**
  * GET /api/league-mapping
- * 获取所有联赛映射
+ * 获取所有联赛映射（支持分页）
+ *
+ * Query 参数:
+ * - page: 页码（从 1 开始，默认 1）
+ * - pageSize: 每页数量（默认 50）
+ * - search: 搜索关键词
+ * - verified: 是否已验证（true/false）
  */
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const { search, verified } = req.query;
+    const { search, verified, page, pageSize } = req.query;
+
+    // 分页参数
+    const currentPage = parseInt(page as string) || 1;
+    const size = parseInt(pageSize as string) || 50;
+    const offset = (currentPage - 1) * size;
 
     let mappings = await leagueMappingManager.getAllMappings();
 
@@ -48,10 +59,21 @@ router.get('/', async (req: Request, res: Response) => {
       mappings = await leagueMappingManager.filterByVerified(isVerified);
     }
 
+    // 总数
+    const total = mappings.length;
+
+    // 分页
+    const paginatedMappings = mappings.slice(offset, offset + size);
+
     res.json({
       success: true,
-      data: mappings,
-      total: mappings.length,
+      data: paginatedMappings,
+      pagination: {
+        page: currentPage,
+        pageSize: size,
+        total,
+        totalPages: Math.ceil(total / size),
+      },
     });
   } catch (error: any) {
     logger.error('[API] 获取联赛映射失败:', error.message);
@@ -204,6 +226,48 @@ router.delete('/:id', async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     logger.error('[API] 删除联赛映射失败:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/league-mapping/batch-delete
+ * 批量删除联赛映射
+ *
+ * Body:
+ * {
+ *   "ids": ["id1", "id2", "id3"]
+ * }
+ */
+router.post('/batch-delete', async (req: Request, res: Response) => {
+  try {
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: '请提供要删除的 ID 列表',
+      });
+    }
+
+    logger.info(`[API] 批量删除 ${ids.length} 条联赛映射`);
+
+    const results = await leagueMappingManager.batchDelete(ids);
+
+    res.json({
+      success: true,
+      message: `成功删除 ${results.deleted} 条映射`,
+      data: {
+        deleted: results.deleted,
+        failed: results.failed,
+        total: ids.length,
+      },
+    });
+  } catch (error: any) {
+    logger.error('[API] 批量删除联赛映射失败:', error.message);
     res.status(500).json({
       success: false,
       error: error.message,

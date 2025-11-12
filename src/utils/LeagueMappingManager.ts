@@ -249,6 +249,50 @@ export class LeagueMappingManager {
   }
 
   /**
+   * 批量删除映射
+   */
+  async batchDelete(ids: string[]): Promise<{ deleted: number; failed: number }> {
+    let deleted = 0;
+    let failed = 0;
+
+    if (this.useDatabase) {
+      // 使用数据库批量删除
+      for (const id of ids) {
+        try {
+          const result = await this.repository.delete(id);
+          if (result) {
+            this.mappings.delete(id);
+            deleted++;
+          } else {
+            failed++;
+          }
+        } catch (error: any) {
+          logger.error(`[LeagueMappingManager] 删除映射失败 ${id}:`, error.message);
+          failed++;
+        }
+      }
+
+      // 清除缓存
+      this.clearCache();
+
+      logger.info(`[LeagueMappingManager] 批量删除完成: 成功 ${deleted}, 失败 ${failed}`);
+    } else {
+      // 文件模式批量删除
+      for (const id of ids) {
+        if (this.mappings.delete(id)) {
+          deleted++;
+        } else {
+          failed++;
+        }
+      }
+      await this.saveMappings();
+      logger.info(`[LeagueMappingManager] 批量删除完成（文件）: 成功 ${deleted}, 失败 ${failed}`);
+    }
+
+    return { deleted, failed };
+  }
+
+  /**
    * 批量导入映射
    */
   async importMappings(mappings: Omit<LeagueMapping, 'id' | 'created_at' | 'updated_at'>[]): Promise<LeagueMapping[]> {
