@@ -139,7 +139,7 @@ router.get('/:id', async (req: Request, res: Response) => {
  */
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { isports_en, isports_cn, crown_cn, verified } = req.body;
+    const { isports_en, isports_cn, isports_tc, crown_cn, verified } = req.body;
 
     if (!isports_en || !isports_cn || !crown_cn) {
       return res.status(400).json({
@@ -151,6 +151,7 @@ router.post('/', async (req: Request, res: Response) => {
     const mapping = await leagueMappingManager.createMapping({
       isports_en,
       isports_cn,
+      isports_tc,
       crown_cn,
       verified: verified || false,
     });
@@ -175,11 +176,12 @@ router.post('/', async (req: Request, res: Response) => {
 router.put('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { isports_en, isports_cn, crown_cn, verified } = req.body;
+    const { isports_en, isports_cn, isports_tc, crown_cn, verified } = req.body;
 
     const mapping = await leagueMappingManager.updateMapping(id, {
       isports_en,
       isports_cn,
+      isports_tc,
       crown_cn,
       verified,
     });
@@ -466,4 +468,3 @@ router.post('/import-excel', upload.single('file'), async (req: Request, res: Re
 
 export default router;
 export { leagueMappingManager };
-

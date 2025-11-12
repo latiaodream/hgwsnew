@@ -119,7 +119,7 @@ router.get('/teams/:id', async (req: Request, res: Response) => {
  */
 router.post('/teams', async (req: Request, res: Response) => {
   try {
-    const { isports_en, isports_cn, crown_cn, verified } = req.body;
+    const { isports_en, isports_cn, isports_tc, crown_cn, verified } = req.body;
 
     if (!isports_en || !isports_cn || !crown_cn) {
       return res.status(400).json({
@@ -131,6 +131,7 @@ router.post('/teams', async (req: Request, res: Response) => {
     const mapping = await mappingManager.createMapping({
       isports_en,
       isports_cn,
+      isports_tc,
       crown_cn,
       verified: verified || false,
     });
@@ -441,4 +442,3 @@ router.post('/teams/import-excel', upload.single('file'), async (req: Request, r
 });
 
 export default router;
-

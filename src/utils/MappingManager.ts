@@ -8,6 +8,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { TeamMapping, TeamMappingData } from '../types/mapping';
 import logger from './logger';
 import { TeamMappingRepository } from '../repositories/TeamMappingRepository';
+import { buildNameVariants } from './nameNormalizer';
 
 export class MappingManager {
   private mappingFilePath: string;
@@ -99,7 +100,14 @@ export class MappingManager {
         this.cacheLoaded = true;
       } catch (error: any) {
         logger.error('[MappingManager] 加载缓存失败:', error.message);
-        throw error;
+        if (this.useDatabase) {
+          logger.warn('[MappingManager] 数据库不可用，回退到文件模式');
+          this.useDatabase = false;
+          this.loadMappings();
+          this.cacheLoaded = true;
+        } else {
+          throw error;
+        }
       } finally {
         this.cacheLoadPromise = null;
       }
@@ -357,19 +365,40 @@ export class MappingManager {
   /**
    * 根据 iSports 名称查找映射
    */
-  async findMappingByISportsName(isportsEn: string, isportsCn: string): Promise<TeamMapping | null> {
+  async findMappingByISportsName(
+    isportsEn: string,
+    isportsCn: string,
+    isportsTc?: string
+  ): Promise<TeamMapping | null> {
+    const targets = buildNameVariants(isportsEn, isportsCn, isportsTc);
+    if (targets.size === 0) {
+      return null;
+    }
+
+    const isMatch = (mapping: TeamMapping): boolean => {
+      const sourceNames = buildNameVariants(
+        mapping.isports_en,
+        mapping.isports_cn,
+        mapping.isports_tc,
+        mapping.crown_cn
+      );
+
+      for (const name of sourceNames) {
+        if (targets.has(name)) {
+          return true;
+        }
+      }
+      return false;
+    };
+
     if (this.useDatabase) {
       // 确保缓存已加载
       await this.ensureCacheLoaded();
       // 从缓存查找
-      return Array.from(this.mappings.values()).find(m =>
-        m.isports_en === isportsEn || m.isports_cn === isportsCn
-      ) || null;
+      return Array.from(this.mappings.values()).find(isMatch) || null;
     } else {
       // 从内存查找
-      return Array.from(this.mappings.values()).find(m =>
-        m.isports_en === isportsEn || m.isports_cn === isportsCn
-      ) || null;
+      return Array.from(this.mappings.values()).find(isMatch) || null;
     }
   }
 
@@ -400,4 +429,3 @@ export class MappingManager {
     logger.info('[MappingManager] 缓存已清除');
   }
 }
-

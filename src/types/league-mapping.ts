@@ -6,6 +6,7 @@ export interface LeagueMapping {
   id: string;
   isports_en: string; // iSports 英文名
   isports_cn: string; // iSports 中文名（简体）
+  isports_tc?: string; // iSports 中文名（繁体，可选）
   crown_cn: string; // 皇冠中文名（简体）
   created_at: string;
   updated_at: string;
@@ -15,4 +16,3 @@ export interface LeagueMapping {
 export interface LeagueMappingData {
   mappings: LeagueMapping[];
 }
-

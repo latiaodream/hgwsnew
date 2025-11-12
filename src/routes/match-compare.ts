@@ -39,17 +39,25 @@ const manualMatches = new Map<string, string>(); // crownGid -> isportsMatchId
  * 优先级：crown_cn > isports_cn > isports_en
  */
 async function applyTeamMappingToISports(match: ISportsMatch): Promise<ISportsMatch> {
-  const homeMapping = await teamMappingManager.findMappingByISportsName(match.team_home_en, match.team_home_cn);
-  const awayMapping = await teamMappingManager.findMappingByISportsName(match.team_away_en, match.team_away_cn);
+  const homeMapping = await teamMappingManager.findMappingByISportsName(
+    match.team_home_en,
+    match.team_home_cn,
+    match.team_home_tc
+  );
+  const awayMapping = await teamMappingManager.findMappingByISportsName(
+    match.team_away_en,
+    match.team_away_cn,
+    match.team_away_tc
+  );
 
   // 优先使用 crown_cn，如果为空则使用 isports_cn，最后才用原始的 team_home_cn
   const homeCn = (homeMapping?.crown_cn && homeMapping.crown_cn.trim() !== '')
     ? homeMapping.crown_cn
-    : (homeMapping?.isports_cn || match.team_home_cn);
+    : (homeMapping?.isports_cn || match.team_home_tc || match.team_home_cn);
 
   const awayCn = (awayMapping?.crown_cn && awayMapping.crown_cn.trim() !== '')
     ? awayMapping.crown_cn
-    : (awayMapping?.isports_cn || match.team_away_cn);
+    : (awayMapping?.isports_cn || match.team_away_tc || match.team_away_cn);
 
   return {
     ...match,
@@ -63,12 +71,16 @@ async function applyTeamMappingToISports(match: ISportsMatch): Promise<ISportsMa
  * 优先级：crown_cn > isports_cn > isports_en
  */
 async function applyLeagueMappingToISports(match: ISportsMatch): Promise<ISportsMatch> {
-  const leagueMapping = await leagueMappingManager.findMappingByISportsName(match.league_name_en, match.league_name_cn);
+  const leagueMapping = await leagueMappingManager.findMappingByISportsName(
+    match.league_name_en,
+    match.league_name_cn,
+    match.league_name_tc
+  );
 
   // 优先使用 crown_cn，如果为空则使用 isports_cn，最后才用原始的 league_name_cn
   const leagueCn = (leagueMapping?.crown_cn && leagueMapping.crown_cn.trim() !== '')
     ? leagueMapping.crown_cn
-    : (leagueMapping?.isports_cn || match.league_name_cn);
+    : (leagueMapping?.isports_cn || match.league_name_tc || match.league_name_cn);
 
   return {
     ...match,
@@ -702,4 +714,3 @@ router.get('/export', async (req: Request, res: Response) => {
 });
 
 export default router;
-

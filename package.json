@@ -32,6 +32,7 @@
     "https-proxy-agent": "^7.0.6",
     "ioredis": "^5.3.2",
     "multer": "^2.0.2",
+    "opencc-js": "^1.0.5",
     "pg": "^8.16.3",
     "socks-proxy-agent": "^8.0.5",
     "uuid": "^13.0.0",
