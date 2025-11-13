@@ -1,12 +1,51 @@
 import { Router, Request, Response } from 'express';
 import { logger } from '../utils/logger';
-import { CrownMatchRepository } from '../repositories/CrownMatchRepository';
+import { CrownMatchRepository, CrownMatch } from '../repositories/CrownMatchRepository';
 import { ScraperManager } from '../scrapers/ScraperManager';
 
 const router = Router();
 
 let scraperManager: ScraperManager | null = null;
 const crownMatchRepository = new CrownMatchRepository();
+
+function normalizeCrownMatch(row: CrownMatch & { raw_data?: any }) {
+  if (!row) return row;
+
+  let rawData = row.raw_data;
+  if (rawData && typeof rawData === 'string') {
+    try {
+      rawData = JSON.parse(rawData);
+    } catch {
+      rawData = null;
+    }
+  }
+
+  const matchTime = row.match_time
+    ? new Date(row.match_time).toISOString()
+    : undefined;
+
+  const showType =
+    (row as any).showType ||
+    row.show_type ||
+    rawData?.showType ||
+    rawData?.show_type;
+
+  return {
+    ...row,
+    showType,
+    league_zh: row.league || rawData?.league_zh || rawData?.league,
+    league_en: rawData?.league_en,
+    home_zh: row.team_home || rawData?.home_zh || rawData?.home,
+    home_en: rawData?.home_en,
+    away_zh: row.team_away || rawData?.away_zh || rawData?.away,
+    away_en: rawData?.away_en,
+    match_time: matchTime,
+    matchTime,
+    live_status: (row as any).live_status || rawData?.live_status,
+    markets: rawData?.markets || (row as any).markets,
+    raw: rawData || row.raw_data,
+  };
+}
 
 export function setScraperManager(manager: ScraperManager) {
   scraperManager = manager;
@@ -34,6 +73,11 @@ router.get('/', async (req: Request, res: Response) => {
         page,
         pageSize,
       });
+
+      result = {
+        data: result.data.map(match => normalizeCrownMatch(match)),
+        total: result.total,
+      };
     } else {
       let matches: any[] = [];
       if (showType && typeof showType === 'string') {
