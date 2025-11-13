@@ -1333,6 +1333,9 @@
               <button class="btn btn-success btn-sm" onclick="exportMatchCompare()">
                 <i class="ri-file-excel-2-line"></i> 导出 Excel
               </button>
+              <button class="btn btn-warning btn-sm" id="batch-save-mapping-btn" onclick="batchSaveMappings()" disabled>
+                <i class="ri-database-2-line"></i> 批量一键入库
+              </button>
               <button class="btn btn-primary btn-sm" onclick="loadMatchCompareData()">
                 <i class="ri-refresh-line"></i> 刷新
               </button>
@@ -3471,31 +3474,62 @@
 
     // ==================== 赛事匹配功能 ====================
     const MATCH_COMPARE_SAVED_KEY = 'matchCompareSavedKeys';
+    const MATCH_SELECTED_KEY = 'matchCompareSelectedKeys';
     let matchCompareData = [];
     let filteredCompareData = [];
     let matchCompareSavedSet = new Set();
+    let matchCompareSelectedSet = new Set();
 
-    const loadSavedMatchSet = () => {
+    const loadSetFromStorage = key => {
       try {
-        const raw = localStorage.getItem(MATCH_COMPARE_SAVED_KEY);
+        const raw = localStorage.getItem(key);
         if (!raw) return new Set();
         const arr = JSON.parse(raw);
         return Array.isArray(arr) ? new Set(arr) : new Set();
       } catch (error) {
-        console.warn('解析 saved match key 失败:', error);
+        console.warn(`解析 ${key} 失败:`, error);
         return new Set();
       }
     };
 
-    const persistSavedMatchSet = () => {
-      localStorage.setItem(MATCH_COMPARE_SAVED_KEY, JSON.stringify(Array.from(matchCompareSavedSet)));
+    const persistSetToStorage = (key, set) => {
+      localStorage.setItem(key, JSON.stringify(Array.from(set)));
     };
+
+    const loadSavedMatchSet = () => loadSetFromStorage(MATCH_COMPARE_SAVED_KEY);
+    const loadSelectedMatchSet = () => loadSetFromStorage(MATCH_SELECTED_KEY);
+    const persistSavedMatchSet = () => persistSetToStorage(MATCH_COMPARE_SAVED_KEY, matchCompareSavedSet);
+    const persistSelectedMatchSet = () => persistSetToStorage(MATCH_SELECTED_KEY, matchCompareSelectedSet);
 
     const getMatchKey = (item) => {
       const crownId = item?.crown?.gid;
       const isportsId = item?.isports?.match_id;
       if (!crownId || !isportsId) return '';
       return `${crownId}-${isportsId}`;
+    };
+
+    const buildPayloadFromMatch = item => {
+      if (!item?.crown || !item?.isports) return null;
+      return {
+        crown: {
+          league_zh: item.crown.league_zh || '',
+          home_zh: item.crown.home_zh || '',
+          away_zh: item.crown.away_zh || '',
+          gid: item.crown.gid || '',
+        },
+        isports: {
+          league_name_en: item.isports.league_name_en || '',
+          league_name_cn: item.isports.league_name_cn || '',
+          league_name_tc: item.isports.league_name_tc || '',
+          team_home_en: item.isports.team_home_en || '',
+          team_home_cn: item.isports.team_home_cn || '',
+          team_home_tc: item.isports.team_home_tc || '',
+          team_away_en: item.isports.team_away_en || '',
+          team_away_cn: item.isports.team_away_cn || '',
+          team_away_tc: item.isports.team_away_tc || '',
+          match_id: item.isports.match_id || '',
+        },
+      };
     };
 
     // 加载赛事匹配数据
@@ -3514,19 +3548,26 @@
 
         if (data.success) {
           matchCompareSavedSet = loadSavedMatchSet();
+          matchCompareSelectedSet = loadSelectedMatchSet();
           matchCompareData = data.data.map(item => {
             const key = getMatchKey(item);
             if (key && matchCompareSavedSet.has(key)) {
               item.matchType = 'saved';
+              matchCompareSelectedSet.delete(key);
             }
             return item;
           });
           const currentKeys = new Set(matchCompareData.map(getMatchKey).filter(Boolean));
           matchCompareSavedSet = new Set([...matchCompareSavedSet].filter(key => currentKeys.has(key)));
+          matchCompareSelectedSet = new Set(
+            [...matchCompareSelectedSet].filter(key => currentKeys.has(key) && !matchCompareSavedSet.has(key))
+          );
           persistSavedMatchSet();
+          persistSelectedMatchSet();
           filteredCompareData = matchCompareData;
           updateMatchCompareStats(data.stats);
           renderMatchCompare();
+          updateBatchButtonState();
         } else {
           alert('加载失败: ' + data.error);
         }
@@ -3545,6 +3586,14 @@
       document.getElementById('compare-manual-matched').textContent = stats.manualMatched || 0;
       document.getElementById('compare-saved').textContent = savedCount;
       document.getElementById('compare-unmatched').textContent = stats.unmatched || 0;
+    }
+
+    function updateBatchButtonState() {
+      const btn = document.getElementById('batch-save-mapping-btn');
+      if (!btn) return;
+      const count = matchCompareSelectedSet.size;
+      btn.disabled = count === 0;
+      btn.innerHTML = `<i class="ri-database-2-line"></i> 批量一键入库${count > 0 ? ` (${count})` : ''}`;
     }
 
     // 渲染赛事对比列表
@@ -3569,32 +3618,16 @@
       });
 
       container.innerHTML = html;
+      updateBatchButtonState();
     }
 
     // 渲染单个对比项
     function renderCompareItem(item) {
       const { crown, isports, matchType, confidence, timeDiff } = item;
+      const matchKey = getMatchKey(item);
       const canSaveMapping = matchType !== 'none' && matchType !== 'saved' && crown && isports;
-      const mappingPayload = canSaveMapping ? encodeURIComponent(JSON.stringify({
-        crown: {
-          league_zh: crown?.league_zh || '',
-          home_zh: crown?.home_zh || '',
-          away_zh: crown?.away_zh || '',
-          gid: crown?.gid || '',
-        },
-        isports: {
-          league_name_en: isports?.league_name_en || '',
-          league_name_cn: isports?.league_name_cn || '',
-          league_name_tc: isports?.league_name_tc || '',
-          team_home_en: isports?.team_home_en || '',
-          team_home_cn: isports?.team_home_cn || '',
-          team_home_tc: isports?.team_home_tc || '',
-          team_away_en: isports?.team_away_en || '',
-          team_away_cn: isports?.team_away_cn || '',
-          team_away_tc: isports?.team_away_tc || '',
-          match_id: isports?.match_id || '',
-        }
-      })) : '';
+      const mappingObj = canSaveMapping ? buildPayloadFromMatch(item) : null;
+      const mappingPayload = mappingObj ? encodeURIComponent(JSON.stringify(mappingObj)) : '';
 
       const matchStatusBadge = matchType === 'saved'
         ? '<span class="badge badge-info">已入库</span>'
@@ -3608,10 +3641,18 @@
         ? `<span style="font-size: 12px; color: var(--text-muted);">时间差: ${timeDiff} 分钟</span>`
         : '';
 
+      const checkboxHtml = matchKey && matchType !== 'saved'
+        ? `<label style="display: inline-flex; align-items: center; gap: 6px; margin-right: 12px;">
+            <input type="checkbox" ${matchCompareSelectedSet.has(matchKey) ? 'checked' : ''} onchange="toggleMatchSelection('${matchKey}', this.checked)">
+            <span style="font-size: 12px; color: var(--text-muted);">批量</span>
+          </label>`
+        : '';
+
       return `
         <div class="compare-item" style="margin-bottom: 20px; padding: 20px; background: var(--bg-light); border-radius: 12px; border: 1px solid var(--border);">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
             <div>
+              ${checkboxHtml}
               ${matchStatusBadge}
               ${timeDiffText}
             </div>
@@ -3625,7 +3666,7 @@
                   <i class="ri-link-unlink"></i> 取消匹配
                 </button>
               `}
-              <button class="btn btn-sm btn-success" ${canSaveMapping ? `data-match-key="${crown?.gid || ''}-${isports?.match_id || ''}" data-payload="${mappingPayload}" onclick="saveMappingFromMatch(this)"` : 'disabled title="需先完成匹配才可入库"'} style="margin-left: 10px; opacity: ${canSaveMapping ? 1 : 0.6}; cursor: ${canSaveMapping ? 'pointer' : 'not-allowed'};">
+              <button class="btn btn-sm btn-success" ${canSaveMapping ? `data-match-key="${matchKey}" data-payload="${mappingPayload}" onclick="saveMappingFromMatch(this)"` : 'disabled title="需先完成匹配才可入库"'} style="margin-left: 10px; opacity: ${canSaveMapping ? 1 : 0.6}; cursor: ${canSaveMapping ? 'pointer' : 'not-allowed'};">
                 <i class="ri-database-2-line"></i> 一键入库
               </button>
             </div>
@@ -3695,16 +3736,16 @@
           </div>
         </div>
       `;
-    }
+  }
 
-    // 筛选赛事对比数据
-    function filterMatchCompare() {
-      const filterType = document.getElementById('compare-filter').value;
-      const leagueFilter = document.getElementById('compare-league-filter').value.toLowerCase();
+  // 筛选赛事对比数据
+  function filterMatchCompare() {
+    const filterType = document.getElementById('compare-filter').value;
+    const leagueFilter = document.getElementById('compare-league-filter').value.toLowerCase();
 
-      filteredCompareData = matchCompareData.filter(item => {
-        if (filterType !== 'saved' && item.matchType === 'saved') return false;
-        if (filterType === 'saved' && item.matchType !== 'saved') return false;
+    filteredCompareData = matchCompareData.filter(item => {
+      if (filterType !== 'saved' && item.matchType === 'saved') return false;
+      if (filterType === 'saved' && item.matchType !== 'saved') return false;
         // 匹配状态筛选
         if (filterType === 'ai-matched' && item.matchType !== 'ai') return false;
         if (filterType === 'manual-matched' && item.matchType !== 'manual') return false;
@@ -3722,10 +3763,22 @@
         return true;
       });
 
-      renderMatchCompare();
-    }
+    renderMatchCompare();
+    updateBatchButtonState();
+  }
 
-    // 手动匹配
+  function toggleMatchSelection(matchKey, checked) {
+    if (!matchKey) return;
+    if (checked) {
+      matchCompareSelectedSet.add(matchKey);
+    } else {
+      matchCompareSelectedSet.delete(matchKey);
+    }
+    persistSelectedMatchSet();
+    updateBatchButtonState();
+  }
+
+  // 手动匹配
     async function manualMatch(crownGid, isportsMatchId) {
       if (!confirm('确定要手动匹配这两场赛事吗？')) return;
 
@@ -3749,12 +3802,12 @@
       }
     }
 
-    // 一键入库
-    async function saveMappingFromMatch(button) {
-      if (!button?.dataset?.payload) {
-        alert('缺少映射数据');
-        return;
-      }
+  // 一键入库
+  async function saveMappingFromMatch(button) {
+    if (!button?.dataset?.payload) {
+      alert('缺少映射数据');
+      return;
+    }
 
       let payload;
       try {
@@ -3765,39 +3818,50 @@
         return;
       }
 
-      if (!payload.crown || !payload.isports) {
-        alert('映射数据不完整');
-        return;
-      }
+    const matchKey = button.dataset.matchKey;
 
-      if (!confirm('确定将该场赛事的球队和联赛名称写入映射并标记为已验证吗？')) {
-        return;
-      }
-
-      try {
-        const res = await fetch('/api/match-compare/save-mapping', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-
-        const data = await res.json();
-        if (data.success) {
-          alert('入库成功！');
-          const key = button.dataset.matchKey;
-          if (key) {
-            matchCompareSavedSet.add(key);
-            persistSavedMatchSet();
-          }
-          loadMatchCompareData();
-        } else {
-          alert('入库失败: ' + data.error);
-        }
-      } catch (error) {
-        console.error('入库失败:', error);
-        alert('入库失败: ' + error.message);
-      }
+    if (!confirm('确定将该场赛事的球队和联赛名称写入映射并标记为已验证吗？')) {
+      return;
     }
+
+    try {
+      await submitMappingPayload(payload, matchKey);
+      loadMatchCompareData();
+    } catch (error) {
+      console.error('入库失败:', error);
+      alert('入库失败: ' + error.message);
+    }
+  }
+
+  async function submitMappingPayload(payload, matchKey, options = {}) {
+    const { silent = false } = options;
+
+    if (!payload?.crown || !payload?.isports) {
+      throw new Error('映射数据不完整');
+    }
+
+    const res = await fetch('/api/match-compare/save-mapping', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+    if (!data.success) {
+      throw new Error(data.error || '入库失败');
+    }
+
+    if (!silent) {
+      alert('入库成功！');
+    }
+
+    if (matchKey) {
+      matchCompareSavedSet.add(matchKey);
+      matchCompareSelectedSet.delete(matchKey);
+      persistSavedMatchSet();
+      persistSelectedMatchSet();
+    }
+  }
 
     // 取消匹配
     async function unmatch(crownGid, isportsMatchId) {
@@ -3817,14 +3881,66 @@
         } else {
           alert('取消失败: ' + data.error);
         }
+    } catch (error) {
+      console.error('取消匹配失败:', error);
+      alert('取消失败: ' + error.message);
+    }
+  }
+
+  async function batchSaveMappings() {
+    const selectedKeys = Array.from(matchCompareSelectedSet);
+    if (selectedKeys.length === 0) {
+      alert('请先勾选需要入库的赛事');
+      return;
+    }
+
+    if (!confirm(`确定将选中的 ${selectedKeys.length} 场赛事写入映射吗？`)) {
+      return;
+    }
+
+    const btn = document.getElementById('batch-save-mapping-btn');
+    const previousHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ri-loader-4-line ri-spin"></i> 批量入库中...';
+
+    let success = 0;
+    let failed = 0;
+
+    for (const key of selectedKeys) {
+      const item = matchCompareData.find(entry => getMatchKey(entry) === key);
+      if (!item || item.matchType === 'saved') {
+        matchCompareSelectedSet.delete(key);
+        continue;
+      }
+
+      const payload = buildPayloadFromMatch(item);
+      if (!payload) {
+        failed++;
+        continue;
+      }
+
+      try {
+        await submitMappingPayload(payload, key, { silent: true });
+        success++;
       } catch (error) {
-        console.error('取消匹配失败:', error);
-        alert('取消失败: ' + error.message);
+        console.error(`批量入库失败 (${key}):`, error);
+        failed++;
       }
     }
 
-    // 导出 Excel
-    async function exportMatchCompare() {
+    matchCompareSelectedSet.clear();
+    persistSelectedMatchSet();
+    await loadMatchCompareData();
+    updateBatchButtonState();
+
+    btn.innerHTML = previousHtml;
+    btn.disabled = true;
+
+    alert(`批量入库完成：成功 ${success} 场${failed ? `，失败 ${failed} 场` : ''}`);
+  }
+
+  // 导出 Excel
+  async function exportMatchCompare() {
       try {
         const showType = document.getElementById('compare-type').value;
         const timeRange = document.getElementById('compare-time-range').value;
