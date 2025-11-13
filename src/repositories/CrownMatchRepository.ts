@@ -52,6 +52,54 @@ export class CrownMatchRepository {
     }
   }
 
+  async paginate(options: {
+    showType?: string;
+    search?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<{ data: CrownMatch[]; total: number }> {
+    const { showType, search } = options;
+    const page = Math.max(options.page || 1, 1);
+    const pageSize = Math.min(Math.max(options.pageSize || 50, 1), 200);
+    const offset = (page - 1) * pageSize;
+
+    const whereClauses: string[] = [];
+    const params: any[] = [];
+
+    if (showType) {
+      whereClauses.push(`show_type = $${params.length + 1}`);
+      params.push(showType);
+    }
+
+    if (search) {
+      const placeholder = `$${params.length + 1}`;
+      whereClauses.push(`(league ILIKE ${placeholder} OR team_home ILIKE ${placeholder} OR team_away ILIKE ${placeholder})`);
+      params.push(`%${search}%`);
+    }
+
+    const whereSql = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+    const dataQuery = `
+      SELECT * FROM crown_matches
+      ${whereSql}
+      ORDER BY match_time DESC NULLS LAST
+      LIMIT $${params.length + 1}
+      OFFSET $${params.length + 2}
+    `;
+
+    const countQuery = `SELECT COUNT(*) as total FROM crown_matches ${whereSql}`;
+
+    const [countResult, dataResult] = await Promise.all([
+      pool.query(countQuery, params),
+      pool.query(dataQuery, [...params, pageSize, offset]),
+    ]);
+
+    return {
+      data: dataResult.rows,
+      total: parseInt(countResult.rows[0].total, 10),
+    };
+  }
+
   /**
    * 根据 GID 获取赛事
    */
@@ -251,4 +299,3 @@ export class CrownMatchRepository {
     }
   }
 }
-
