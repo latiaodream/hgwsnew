@@ -1677,6 +1677,12 @@
     let filteredThirdparty = [];
     let filteredCrown = [];
     let filteredMatchPush = [];
+    const crownRefreshIntervals = {
+      live: 10000,
+      today: 60000,
+      early: 3600000,
+    };
+
     let crownStats = { live: 0, today: 0, early: 0, total: 0 };
     let crownPagination = { page: 1, pageSize: 20, total: 0, totalPages: 1 };
     let crownFilters = { type: 'live', search: '' };
@@ -2101,16 +2107,23 @@
       return currentPage === 'crown';
     }
 
+    function getCrownRefreshInterval() {
+      const type = crownFilters.type || 'live';
+      return crownRefreshIntervals[type] || 0;
+    }
+
     function startCrownAutoRefresh() {
       stopCrownAutoRefresh();
-      if (crownFilters.type !== 'live') return;
       if (!isCrownPageVisible()) return;
 
+      const interval = getCrownRefreshInterval();
+      if (!interval) return;
+
       crownAutoRefreshTimer = setInterval(() => {
-        if (!isCrownPageVisible() || crownFilters.type !== 'live') return;
+        if (!isCrownPageVisible()) return;
         loadCrownStats();
         loadCrownData();
-      }, 10000);
+      }, interval);
     }
 
     function stopCrownAutoRefresh() {
@@ -2254,8 +2267,7 @@
       crownPagination.page = 1;
       setCrownTypeHighlight(type);
       loadCrownData();
-      if (type === 'live') startCrownAutoRefresh();
-      else stopCrownAutoRefresh();
+      startCrownAutoRefresh();
     }
 
     function setCrownTypeHighlight(type) {
@@ -2276,8 +2288,7 @@
       crownPagination.page = 1;
       setCrownTypeHighlight(crownFilters.type);
       loadCrownData();
-      if (crownFilters.type === 'live') startCrownAutoRefresh();
-      else stopCrownAutoRefresh();
+      startCrownAutoRefresh();
     }
 
     function handleCrownSearch() {
@@ -3246,8 +3257,7 @@
       await loadCrownStats();
       await loadCrownData();
       if (isCrownPageVisible()) {
-        if (crownFilters.type === 'live') startCrownAutoRefresh();
-        else stopCrownAutoRefresh();
+        startCrownAutoRefresh();
       }
     }
 
