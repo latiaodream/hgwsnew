@@ -254,6 +254,158 @@ export class CrownMatchRepository {
   }
 
   /**
+   * 完整替换指定类型的赛事
+   */
+  async replaceByShowType(showType: string, matches: CrownMatch[]): Promise<number> {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM crown_matches WHERE show_type = $1', [showType]);
+
+      let inserted = 0;
+      for (const match of matches) {
+        await client.query(
+          `INSERT INTO crown_matches (
+            gid, show_type, league, team_home, team_away, match_time,
+            handicap, handicap_home, handicap_away,
+            over_under, over, under,
+            home_win, draw, away_win,
+            strong, more, raw_data, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+          ON CONFLICT (gid) DO UPDATE SET
+            show_type = EXCLUDED.show_type,
+            league = EXCLUDED.league,
+            team_home = EXCLUDED.team_home,
+            team_away = EXCLUDED.team_away,
+            match_time = EXCLUDED.match_time,
+            handicap = EXCLUDED.handicap,
+            handicap_home = EXCLUDED.handicap_home,
+            handicap_away = EXCLUDED.handicap_away,
+            over_under = EXCLUDED.over_under,
+            over = EXCLUDED.over,
+            under = EXCLUDED.under,
+            home_win = EXCLUDED.home_win,
+            draw = EXCLUDED.draw,
+            away_win = EXCLUDED.away_win,
+            strong = EXCLUDED.strong,
+            more = EXCLUDED.more,
+            raw_data = EXCLUDED.raw_data,
+            updated_at = EXCLUDED.updated_at`,
+          [
+            match.gid,
+            showType,
+            match.league,
+            match.team_home,
+            match.team_away,
+            match.match_time,
+            match.handicap,
+            match.handicap_home,
+            match.handicap_away,
+            match.over_under,
+            match.over,
+            match.under,
+            match.home_win,
+            match.draw,
+            match.away_win,
+            match.strong,
+            match.more,
+            JSON.stringify(match.raw_data),
+            match.created_at || new Date().toISOString(),
+            new Date().toISOString(),
+          ]
+        );
+        inserted++;
+      }
+
+      await client.query('COMMIT');
+      return inserted;
+    } catch (error: any) {
+      await client.query('ROLLBACK');
+      logger.error(`[CrownMatchRepository] 替换 ${showType} 赛事失败:`, error.message);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 替换指定类型的所有赛事
+   * 先删除该类型的旧数据，再插入新的赛事列表
+   */
+  async replaceByShowType(showType: string, matches: CrownMatch[]): Promise<number> {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      await client.query('DELETE FROM crown_matches WHERE show_type = $1', [showType]);
+
+      let count = 0;
+      for (const match of matches) {
+        await client.query(
+          `INSERT INTO crown_matches (
+            gid, show_type, league, team_home, team_away, match_time,
+            handicap, handicap_home, handicap_away,
+            over_under, over, under,
+            home_win, draw, away_win,
+            strong, more, raw_data, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+          ON CONFLICT (gid) DO UPDATE SET
+            show_type = EXCLUDED.show_type,
+            league = EXCLUDED.league,
+            team_home = EXCLUDED.team_home,
+            team_away = EXCLUDED.team_away,
+            match_time = EXCLUDED.match_time,
+            handicap = EXCLUDED.handicap,
+            handicap_home = EXCLUDED.handicap_home,
+            handicap_away = EXCLUDED.handicap_away,
+            over_under = EXCLUDED.over_under,
+            over = EXCLUDED.over,
+            under = EXCLUDED.under,
+            home_win = EXCLUDED.home_win,
+            draw = EXCLUDED.draw,
+            away_win = EXCLUDED.away_win,
+            strong = EXCLUDED.strong,
+            more = EXCLUDED.more,
+            raw_data = EXCLUDED.raw_data,
+            updated_at = EXCLUDED.updated_at`,
+          [
+            match.gid,
+            match.show_type || showType,
+            match.league,
+            match.team_home,
+            match.team_away,
+            match.match_time,
+            match.handicap,
+            match.handicap_home,
+            match.handicap_away,
+            match.over_under,
+            match.over,
+            match.under,
+            match.home_win,
+            match.draw,
+            match.away_win,
+            match.strong,
+            match.more,
+            JSON.stringify(match.raw_data),
+            match.created_at || new Date().toISOString(),
+            new Date().toISOString(),
+          ]
+        );
+        count++;
+      }
+
+      await client.query('COMMIT');
+      return count;
+    } catch (error: any) {
+      await client.query('ROLLBACK');
+      logger.error(`[CrownMatchRepository] 重置 ${showType} 赛事失败:`, error.message);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
    * 删除旧赛事（超过指定天数）
    */
   async deleteOldMatches(days: number): Promise<number> {
