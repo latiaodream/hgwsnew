@@ -1052,12 +1052,26 @@
               </div>
               <div class="filter-group">
                 <label class="filter-label">搜索</label>
-                <input type="text" id="crown-filter-search" placeholder="球队名称..." oninput="filterCrown()">
+                <input type="text" id="crown-filter-search" placeholder="球队名称..." oninput="handleCrownSearch()">
               </div>
             </div>
             <div class="matches-container" id="crown-matches">
               <div style="text-align: center; padding: 40px;">
                 <div class="loading"></div>
+              </div>
+            </div>
+            <div class="pagination" id="crown-pagination" style="margin-top: 20px; display: none; align-items: center; gap: 12px;">
+              <button class="btn btn-sm" id="crown-prev-page" onclick="goToCrownPage('prev')">上一页</button>
+              <span id="crown-page-info">第 1 页 / 共 1 页</span>
+              <button class="btn btn-sm" id="crown-next-page" onclick="goToCrownPage('next')">下一页</button>
+              <div style="margin-left: auto; display: flex; align-items: center; gap: 8px;">
+                <span>每页</span>
+                <select id="crown-page-size" onchange="changeCrownPageSize(this.value)">
+                  <option value="20">20</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select>
+                <span>条，共 <span id="crown-total-count">0</span> 条</span>
               </div>
             </div>
           </div>
@@ -1384,6 +1398,7 @@
               <div class="filter-group">
                 <label class="filter-label">匹配状态</label>
                 <select id="compare-filter" onchange="filterMatchCompare()">
+                  <option value="not-saved" selected>未入库</option>
                   <option value="all">全部</option>
                   <option value="ai-matched">AI 匹配</option>
                   <option value="manual-matched">手动匹配</option>
@@ -1662,6 +1677,10 @@
     let filteredThirdparty = [];
     let filteredCrown = [];
     let filteredMatchPush = [];
+    let crownStats = { live: 0, today: 0, early: 0, total: 0 };
+    let crownPagination = { page: 1, pageSize: 20, total: 0, totalPages: 1 };
+    let crownFilters = { type: 'live', search: '' };
+    let crownSearchTimer = null;
 
     // 页面切换
     document.querySelectorAll('.nav-item').forEach(item => {
@@ -1678,7 +1697,12 @@
 
         // 加载对应数据
         if (page === 'thirdparty') loadThirdPartyData('live');
-        else if (page === 'crown') loadCrownData('live');
+        else if (page === 'crown') {
+          if (!crownFilters.type) crownFilters.type = 'live';
+          document.getElementById('crown-filter-type').value = crownFilters.type;
+          setCrownTypeHighlight(crownFilters.type);
+          refreshCrown();
+        }
         else if (page === 'mapping') loadMappingData();
         else if (page === 'league-mapping') loadLeagueMappingData();
         else if (page === 'match-push') loadMatchPushData();
@@ -1717,6 +1741,7 @@
 
         // 加载快速概览
         switchOverviewTab('live');
+        await loadCrownStats();
       } catch (error) {
         console.error('加载仪表板失败:', error);
       }
@@ -1998,34 +2023,70 @@
       renderThirdPartyTable();
     }
 
-    // 加载皇冠数据
-    async function loadCrownData(defaultType = 'live') {
+    async function loadCrownStats() {
       try {
-        const res = await fetch('/api/matches');
+        const res = await fetch('/api/matches/stats/summary');
+        const data = await res.json();
+
+        if (data.success) {
+          const stats = data.stats || {};
+          const live = stats.live ?? stats.byType?.live ?? 0;
+          const today = stats.today ?? stats.byType?.today ?? 0;
+          const early = stats.early ?? stats.byType?.early ?? 0;
+          const total = stats.total ?? (live + today + early);
+
+          crownStats = { live, today, early, total };
+
+          document.getElementById('crown-live-count').textContent = live;
+          document.getElementById('crown-today-count').textContent = today;
+          document.getElementById('crown-early-count').textContent = early;
+          document.getElementById('stat-crown').textContent = total;
+        }
+      } catch (error) {
+        console.warn('加载皇冠统计失败:', error);
+      }
+    }
+
+    // 加载皇冠数据
+    async function loadCrownData(options = {}) {
+      try {
+        if (options.type) crownFilters.type = options.type;
+        if (typeof options.search === 'string') crownFilters.search = options.search;
+        if (options.page) crownPagination.page = options.page;
+        if (options.pageSize) crownPagination.pageSize = options.pageSize;
+
+        const params = new URLSearchParams({
+          page: crownPagination.page,
+          pageSize: crownPagination.pageSize
+        });
+
+        if (crownFilters.type && crownFilters.type !== 'all') {
+          params.append('showType', crownFilters.type);
+        }
+        if (crownFilters.search) {
+          params.append('search', crownFilters.search.trim());
+        }
+
+        const res = await fetch(`/api/matches?${params}`);
         const data = await res.json();
 
         if (data.success) {
           crownData = data.data || [];
-
-          // 更新统计信息
-          const liveCount = crownData.filter(m => m.showType === 'live').length;
-          const todayCount = crownData.filter(m => m.showType === 'today').length;
-          const earlyCount = crownData.filter(m => m.showType === 'early').length;
-
-          document.getElementById('crown-live-count').textContent = liveCount;
-          document.getElementById('crown-today-count').textContent = todayCount;
-          document.getElementById('crown-early-count').textContent = earlyCount;
-          document.getElementById('stat-crown').textContent = crownData.length;
-
-          // 默认显示滚球数据
-          document.getElementById('crown-filter-type').value = defaultType;
-          switchCrownType(defaultType);
+          filteredCrown = crownData;
+          const pagination = data.pagination || {};
+          crownPagination.total = pagination.total ?? crownData.length;
+          crownPagination.totalPages = Math.max(pagination.totalPages ?? 1, 1);
+          updateCrownPagination();
+          renderCrownTable();
+        } else {
+          throw new Error(data.error || '加载失败');
         }
       } catch (error) {
         console.error('加载皇冠数据失败:', error);
         document.getElementById('crown-matches').innerHTML = `
           <div style="text-align: center; padding: 40px; color: var(--danger);">加载失败: ${error.message}</div>
         `;
+        document.getElementById('crown-pagination').style.display = 'none';
       }
     }
 
@@ -2034,10 +2095,10 @@
       const container = document.getElementById('crown-matches');
 
       if (filteredCrown.length === 0) {
-        const currentType = document.getElementById('crown-filter-type').value;
-        const liveCount = crownData.filter(m => m.showType === 'live').length;
-        const todayCount = crownData.filter(m => m.showType === 'today').length;
-        const earlyCount = crownData.filter(m => m.showType === 'early').length;
+        const currentType = crownFilters.type || document.getElementById('crown-filter-type').value;
+        const liveCount = crownStats.live || 0;
+        const todayCount = crownStats.today || 0;
+        const earlyCount = crownStats.early || 0;
 
         let suggestion = '';
         if (currentType === 'live' && todayCount > 0) {
@@ -2158,36 +2219,79 @@
 
     // 切换皇冠数据类型
     function switchCrownType(type) {
+      crownFilters.type = type;
       document.getElementById('crown-filter-type').value = type;
+      crownPagination.page = 1;
+      setCrownTypeHighlight(type);
+      loadCrownData();
+    }
 
-      // 更新统计卡片高亮
+    function setCrownTypeHighlight(type) {
       document.querySelectorAll('[id^="crown-stat-"]').forEach(card => {
         card.style.opacity = '0.6';
         card.style.transform = 'scale(1)';
       });
-      document.getElementById(`crown-stat-${type}`).style.opacity = '1';
-      document.getElementById(`crown-stat-${type}`).style.transform = 'scale(1.05)';
-
-      filterCrown();
+      const target = document.getElementById(`crown-stat-${type}`);
+      if (target) {
+        target.style.opacity = '1';
+        target.style.transform = 'scale(1.05)';
+      }
     }
 
-    // 筛选皇冠数据
+    // 筛选皇冠数据（类型下拉）
     function filterCrown() {
-      const type = document.getElementById('crown-filter-type').value;
-      const search = document.getElementById('crown-filter-search').value.toLowerCase();
+      crownFilters.type = document.getElementById('crown-filter-type').value;
+      crownPagination.page = 1;
+      setCrownTypeHighlight(crownFilters.type);
+      loadCrownData();
+    }
 
-      filteredCrown = crownData.filter(match => {
-        const matchType = type === 'all' || match.showType === type;
-        const matchSearch = !search ||
-          (match.home_zh && match.home_zh.toLowerCase().includes(search)) ||
-          (match.away_zh && match.away_zh.toLowerCase().includes(search)) ||
-          (match.home_en && match.home_en.toLowerCase().includes(search)) ||
-          (match.away_en && match.away_en.toLowerCase().includes(search));
+    function handleCrownSearch() {
+      crownFilters.search = document.getElementById('crown-filter-search').value.trim();
+      crownPagination.page = 1;
+      if (crownSearchTimer) clearTimeout(crownSearchTimer);
+      crownSearchTimer = setTimeout(() => loadCrownData(), 300);
+    }
 
-        return matchType && matchSearch;
-      });
+    function updateCrownPagination() {
+      const paginationEl = document.getElementById('crown-pagination');
+      if (!paginationEl) return;
+      if (!crownPagination.total) {
+        paginationEl.style.display = 'none';
+        return;
+      }
 
-      renderCrownTable();
+      paginationEl.style.display = 'flex';
+      const totalPages = Math.max(crownPagination.totalPages || 1, 1);
+
+      document.getElementById('crown-page-info').textContent =
+        `第 ${crownPagination.page} 页 / 共 ${totalPages} 页`;
+      document.getElementById('crown-total-count').textContent = crownPagination.total;
+      document.getElementById('crown-page-size').value = crownPagination.pageSize;
+      document.getElementById('crown-prev-page').disabled = crownPagination.page <= 1;
+      document.getElementById('crown-next-page').disabled = crownPagination.page >= totalPages;
+    }
+
+    function goToCrownPage(target) {
+      let nextPage = crownPagination.page;
+      if (target === 'prev') nextPage -= 1;
+      else if (target === 'next') nextPage += 1;
+      else nextPage = parseInt(target, 10) || crownPagination.page;
+
+      const totalPages = Math.max(crownPagination.totalPages || 1, 1);
+      nextPage = Math.min(Math.max(nextPage, 1), totalPages);
+      if (nextPage === crownPagination.page) return;
+
+      crownPagination.page = nextPage;
+      loadCrownData();
+    }
+
+    function changeCrownPageSize(value) {
+      const size = parseInt(value, 10) || 20;
+      if (size === crownPagination.pageSize) return;
+      crownPagination.pageSize = size;
+      crownPagination.page = 1;
+      loadCrownData();
     }
 
     // 球队映射分页变量
@@ -3105,10 +3209,8 @@
     }
 
     async function refreshCrown() {
-      alert('皇冠数据自动更新中...');
-      // 获取当前选中的类型
-      const currentType = document.getElementById('crown-filter-type').value;
-      await loadCrownData(currentType);
+      await loadCrownStats();
+      await loadCrownData();
     }
 
     // 工具函数
@@ -3744,24 +3846,22 @@
     const leagueFilter = document.getElementById('compare-league-filter').value.toLowerCase();
 
     filteredCompareData = matchCompareData.filter(item => {
-      if (filterType !== 'saved' && item.matchType === 'saved') return false;
+      if (filterType === 'not-saved' && item.matchType === 'saved') return false;
       if (filterType === 'saved' && item.matchType !== 'saved') return false;
-        // 匹配状态筛选
-        if (filterType === 'ai-matched' && item.matchType !== 'ai') return false;
-        if (filterType === 'manual-matched' && item.matchType !== 'manual') return false;
-        if (filterType === 'unmatched' && item.matchType !== 'none') return false;
+      if (filterType === 'ai-matched' && item.matchType !== 'ai') return false;
+      if (filterType === 'manual-matched' && item.matchType !== 'manual') return false;
+      if (filterType === 'unmatched' && item.matchType !== 'none') return false;
 
-        // 联赛筛选
-        if (leagueFilter) {
-          const crownLeague = (item.crown?.league_zh || '').toLowerCase();
-          const isportsLeague = (item.isports?.league_name_cn || item.isports?.league_name_en || '').toLowerCase();
-          if (!crownLeague.includes(leagueFilter) && !isportsLeague.includes(leagueFilter)) {
-            return false;
-          }
+      if (leagueFilter) {
+        const crownLeague = (item.crown?.league_zh || '').toLowerCase();
+        const isportsLeague = (item.isports?.league_name_cn || item.isports?.league_name_en || '').toLowerCase();
+        if (!crownLeague.includes(leagueFilter) && !isportsLeague.includes(leagueFilter)) {
+          return false;
         }
+      }
 
-        return true;
-      });
+      return true;
+    });
 
     renderMatchCompare();
     updateBatchButtonState();
