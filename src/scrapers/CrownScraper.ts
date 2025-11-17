@@ -301,6 +301,12 @@ export class CrownScraper {
    */
   private async parseXmlResponse(xml: string): Promise<any> {
     try {
+      const trimmed = xml.trim();
+      // 有些域名（例如 hga026）的 transform.php 会直接返回 HTML 检测页，这里直接抛出特殊错误
+      if (trimmed.startsWith('<!DOCTYPE html') || trimmed.startsWith('<html')) {
+        throw new Error('HTML_RESPONSE_NOT_XML');
+      }
+
       // 部分 transform.php 响应中可能出现未转义的 &xxx 实体，导致 "Invalid character in entity name"
       // 这里先把非标准 XML 实体的 & 转成 &amp;，避免解析直接抛错
       const sanitizedXml = xml.replace(/&(?!amp;|lt;|gt;|quot;|apos;|#\d+;|#x[0-9a-fA-F]+;)/g, '&amp;');
@@ -425,6 +431,15 @@ export class CrownScraper {
           }
         }
         if (code) logger.error(`[${this.account.showType}] 错误代码: ${code}`);
+
+        // XML 解析失败 / HTML 检测页等情况，也视为当前域名不可用，切换下一个候选域名
+        if (errorMsg.includes('HTML_RESPONSE_NOT_XML') ||
+            errorMsg.includes('Invalid character in entity name') ||
+            errorMsg.includes('Unencoded <')) {
+          logger.warn(`[${this.account.showType}] 当前域名返回非预期 XML，尝试切换下一个基础域名...`);
+          this.switchToNextBaseUrl();
+          continue;
+        }
 
         // 遇到 404/405/502/503 之类，切换下一个域名再试
         if ([404, 405, 502, 503].includes(status)) {
