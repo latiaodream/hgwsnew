@@ -297,11 +297,15 @@ export class CrownScraper {
   }
 
   /**
-   * 解析 XML 响应
+   * 解析 XML 响应，并尝试自动修复不规范的 & 字符
    */
   private async parseXmlResponse(xml: string): Promise<any> {
     try {
-      const result = await parseStringPromise(xml, {
+      // 部分 transform.php 响应中可能出现未转义的 &xxx 实体，导致 "Invalid character in entity name"
+      // 这里先把非标准 XML 实体的 & 转成 &amp;，避免解析直接抛错
+      const sanitizedXml = xml.replace(/&(?!amp;|lt;|gt;|quot;|apos;|#\d+;|#x[0-9a-fA-F]+;)/g, '&amp;');
+
+      const result = await parseStringPromise(sanitizedXml, {
         explicitArray: false,
         mergeAttrs: true,
         trim: true,
