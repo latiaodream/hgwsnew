@@ -6,6 +6,11 @@ export interface AccountConfig {
   username: string;
   password: string;
   showType: ShowType;
+  /**
+   * 可选：为该账号指定独立代理（http/https/socks5），例如：
+   * socks5://user:pass@host:port
+   */
+  proxyUrl?: string;
 }
 
 // 赛事数据

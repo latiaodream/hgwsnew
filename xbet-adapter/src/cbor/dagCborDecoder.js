@@ -49,6 +49,8 @@ export class DagCborDecoder {
         const big = this.view.getBigUint64(this.offset, false);
         this.offset += 8;
         return big <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(big) : big;
+      case 30:
+        return Infinity; // treat as streaming
       case 31:
         return Infinity; // streaming
       default:

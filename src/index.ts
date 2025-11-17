@@ -50,14 +50,10 @@ class Application {
     // 静态文件服务
     this.expressApp.use(express.static(path.join(process.cwd(), 'public')));
 
-    // API 路由
-    this.expressApp.use('/api/mapping', mappingRouter);
-    this.expressApp.use('/api/league-mapping', leagueMappingRouter);
-    this.expressApp.use('/api/thirdparty', thirdpartyRouter);
+    // API 路由（已简化：仅保留核心抓取与推送功能）
     this.expressApp.use('/api/matches', matchesRouter);
     this.expressApp.use('/api/match-push', matchPushRouter);
     this.expressApp.use('/api/match-compare', matchCompareRouter);
-    this.expressApp.use('/api/history', historyRouter);
 
     // 页面路由
     this.expressApp.get('/', (req, res) => {
@@ -109,8 +105,8 @@ class Application {
       logger.info('✅ 数据库表初始化完成');
       this.databaseReady = true;
       this.scraperManager.setUseDatabase(true);
-      this.historyService = new MatchHistoryService();
-      this.historyService.start();
+      // 
+      this.historyService = undefined;
     } else {
       logger.warn('⚠️ 数据库连接失败，将使用 JSON 文件存储');
       this.databaseReady = false;
@@ -244,8 +240,11 @@ class Application {
     label?: string
   ): void {
     if (!username || !password) return;
-    accounts.push({ username, password, showType });
-    logger.info(`✅ 加载${label || showType}：${username}`);
+    const proxyEnvKey = `${showType.toUpperCase()}_CROWN_PROXY_URL`;
+    const proxyUrl = (process.env as any)[proxyEnvKey] as string | undefined;
+
+    accounts.push({ username, password, showType, proxyUrl });
+    logger.info(`✅ 加载${label || showType}：${username}${proxyUrl ? ' (带代理)' : ''}`);
   }
 
   private appendAccountPool(
@@ -261,17 +260,20 @@ class Application {
       .filter(Boolean);
 
     entries.forEach((entry, idx) => {
-      const [username, password] = entry.includes('/') ? entry.split('/') : entry.split(':');
+      const [credsPart, proxyPart] = entry.split('|');
+      const [username, password] = credsPart.includes('/') ? credsPart.split('/') : credsPart.split(':');
       if (!username || !password) {
         logger.warn(`⚠️ ${label || showType} 中的账号格式无效: ${entry}`);
         return;
       }
+      const proxyUrl = proxyPart ? proxyPart.trim() : undefined;
       accounts.push({
         username: username.trim(),
         password: password.trim(),
         showType,
+        proxyUrl,
       });
-      logger.info(`✅ 加载${label || showType} #${idx + 1}: ${username.trim()}`);
+      logger.info(`✅ 加载${label || showType} #${idx + 1}: ${username.trim()}${proxyUrl ? ' (带代理)' : ''}`);
     });
   }
 

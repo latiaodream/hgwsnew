@@ -1,26 +1,18 @@
 {
   "endpoint": "wss://gw.xbetbot.com/?lang=zh-CN",
-  "token": "aRb08HVwWVNXNkJ1Q1A2aTVnd25MX1g5Q0g2UXNJVnpIeDhYbVhrajVMTlpLRZxkEl2Udkwu_mGV2iqYRVZNnDDjuTHjnkYMwbkg67xr",
   "username": "latiao",
   "password": "latiao2025",
+  "email": "latiaodream@gmail.com",
+  "code": "",
+  "deviceIdFile": ".xbet-device-id",
+  "userAgent": "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Mobile Safari/537.36",
   "subscriptions": ["matches", "odds", "live"],
   "heartbeatIntervalMs": 30000,
-  "redis": {
-    "enabled": true,
-    "host": "127.0.0.1",
-    "port": 6379,
-    "password": "",
-    "db": 0,
-    "prefix": "xbet"
-  },
-  "internalWs": {
-    "enabled": true,
-    "port": 18081
-  },
-  "dashboard": {
-    "enabled": true,
-    "port": 18082,
-    "title": "XBet 数据监控面板",
-    "publicDir": "./public/dashboard"
+  "origin": "https://b.xbetbot.com",
+  "wsHeaders": {
+    "user-agent": "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Mobile Safari/537.36",
+    "accept-language": "en,en-US;q=0.9,zh-HK;q=0.8,zh;q=0.7,zh-CN;q=0.6",
+    "cache-control": "no-cache",
+    "pragma": "no-cache"
   }
 }

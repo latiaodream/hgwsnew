@@ -177,7 +177,9 @@ export class CrownScraper {
    * 创建代理 Agent（支持 HTTP/HTTPS/SOCKS5）
    */
   private createProxyAgent(): any {
-    const proxyUrl = process.env.CROWN_PROXY_URL;
+    const showTypeProxyKey = `${this.account.showType.toUpperCase()}_CROWN_PROXY_URL`;
+    const showTypeProxy = (process.env as any)[showTypeProxyKey] as string | undefined;
+    const proxyUrl = this.account.proxyUrl || showTypeProxy || process.env.CROWN_PROXY_URL;
     if (!proxyUrl) return null;
 
     try {

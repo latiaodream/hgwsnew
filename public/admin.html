@@ -780,33 +780,9 @@
       <h1><i class="ri-dashboard-line"></i> 赔率管理</h1>
     </div>
     <nav class="sidebar-nav">
-      <div class="nav-item active" data-page="dashboard">
-        <i class="ri-dashboard-3-line"></i>
-        <span>数据总览</span>
-      </div>
-      <div class="nav-item" data-page="thirdparty">
-        <i class="ri-database-2-line"></i>
-        <span>第三方赔率</span>
-      </div>
-      <div class="nav-item" data-page="crown">
+      <div class="nav-item active" data-page="crown">
         <i class="ri-trophy-line"></i>
         <span>皇冠赛事</span>
-      </div>
-      <div class="nav-item" data-page="mapping">
-        <i class="ri-link-m"></i>
-        <span>球队映射</span>
-      </div>
-      <div class="nav-item" data-page="league-mapping">
-        <i class="ri-trophy-line"></i>
-        <span>联赛映射</span>
-      </div>
-      <div class="nav-item" data-page="match-push">
-        <i class="ri-send-plane-line"></i>
-        <span>赛事推送</span>
-      </div>
-      <div class="nav-item" data-page="match-compare">
-        <i class="ri-git-compare-line"></i>
-        <span>赛事匹配</span>
       </div>
     </nav>
   </div>
@@ -1688,7 +1664,7 @@
     let crownFilters = { type: 'live', search: '' };
     let crownSearchTimer = null;
     let crownAutoRefreshTimer = null;
-    let currentPage = 'dashboard';
+    let currentPage = 'crown';
 
     // 页面切换
     document.querySelectorAll('.nav-item').forEach(item => {
@@ -1726,8 +1702,27 @@
 
     // 初始化
     async function init() {
-      await loadDashboard();
-      setInterval(updateStats, 30000); // 每30秒更新统计
+      // 默认进入皇冠赛事页面
+      document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
+      const crownPage = document.getElementById('page-crown');
+      if (crownPage) crownPage.style.display = 'block';
+
+      const crownNav = document.querySelector('.nav-item[data-page="crown"]');
+      if (crownNav) {
+        document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+        crownNav.classList.add('active');
+      }
+
+      currentPage = 'crown';
+      if (!crownFilters.type) crownFilters.type = 'live';
+      const typeSelect = document.getElementById('crown-filter-type');
+      if (typeSelect) typeSelect.value = crownFilters.type;
+      setCrownTypeHighlight(crownFilters.type);
+      await refreshCrown();
+      startCrownAutoRefresh();
+
+      // 定时刷新皇冠数据
+      setInterval(updateStats, 30000);
     }
 
     // 加载仪表板
@@ -3378,7 +3373,8 @@
     }
 
     function updateStats() {
-      loadDashboard();
+      //   
+      refreshCrown();
     }
 
     // ==================== 赛事推送功能 ====================

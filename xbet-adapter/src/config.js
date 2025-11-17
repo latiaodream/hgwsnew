@@ -9,13 +9,29 @@ function loadJson(path) {
   }
 }
 
+function parseJson(value) {
+  if (!value) return undefined;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return undefined;
+  }
+}
+
 const defaultConfig = {
   endpoint: process.env.XBET_ENDPOINT || 'wss://gw.xbetbot.com/?lang=zh-CN',
   token: process.env.XBET_TOKEN || '',
   username: process.env.XBET_USERNAME || '',
   password: process.env.XBET_PASSWORD || '',
+  email: process.env.XBET_EMAIL || '',
+  code: process.env.XBET_CODE || '',
   subscriptions: ['matches', 'odds', 'live'],
   heartbeatIntervalMs: Number(process.env.XBET_HEARTBEAT_MS || 30000),
+  origin: process.env.XBET_ORIGIN || '',
+  wsHeaders: parseJson(process.env.XBET_WS_HEADERS) || {},
+  userAgent: process.env.XBET_USER_AGENT || '',
+  deviceId: process.env.XBET_DEVICE_ID || '',
+  deviceIdFile: process.env.XBET_DEVICE_ID_FILE || '.xbet-device-id',
   redis: {
     enabled: process.env.REDIS_ENABLED === '1' || process.env.REDIS_HOST,
     host: process.env.REDIS_HOST || '127.0.0.1',

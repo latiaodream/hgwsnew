@@ -6,8 +6,10 @@ export class RC4 {
     this.S = new Uint8Array(256);
     this.i = 0;
     this.j = 0;
+
+    // KSA：与前端 Ge() 实现保持一致，初始 S[i] = ~i & 0xff
     for (let idx = 0; idx < 256; idx++) {
-      this.S[idx] = idx;
+      this.S[idx] = (~idx) & 0xff;
     }
     let j = 0;
     for (let idx = 0; idx < 256; idx++) {
