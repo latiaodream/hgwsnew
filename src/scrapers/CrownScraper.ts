@@ -30,6 +30,7 @@ export class CrownScraper {
   private suspensionReason: string = '';
   private lastSuspensionLog?: { context: string; time: number };
   private lastLoginTs?: number;
+  private loginFailCount: number = 0; // 连续登录失败次数
   private enableMoreMarkets: boolean;
   private moreMarketsStartDelayMs: number;
   private moreMarketsIntervalMs: number;
@@ -185,7 +186,7 @@ export class CrownScraper {
     try {
       if (proxyUrl.startsWith('socks://') || proxyUrl.startsWith('socks5://')) {
         logger.info(`[${this.account.showType}] 使用 SOCKS5 代理: ${proxyUrl.replace(/:[^:@]+@/, ':***@')}`);
-        return new SocksProxyAgent(proxyUrl);
+        return new SocksProxyAgent(proxyUrl, { rejectUnauthorized: false } as any);
       } else if (proxyUrl.startsWith('http://') || proxyUrl.startsWith('https://')) {
         logger.info(`[${this.account.showType}] 使用 HTTP(S) 代理: ${proxyUrl.replace(/:[^:@]+@/, ':***@')}`);
         return new HttpsProxyAgent(proxyUrl, { rejectUnauthorized: false } as any);
@@ -349,6 +350,11 @@ export class CrownScraper {
    * 登录皇冠账号
    */
   async login(): Promise<boolean> {
+    // 如果账号正处于冷却期，直接跳过登录
+    if (this.shouldSkipBecauseSuspended('login')) {
+      return false;
+    }
+
     // 按候选域名循环尝试登录
     for (let attempt = 0; attempt < this.baseUrlCandidates.length; attempt++) {
       try {
@@ -403,16 +409,20 @@ export class CrownScraper {
           this.isLoggedIn = true;
           this.uid = loginResponse.uid;
           this.lastLoginTs = Date.now();
+          this.loginFailCount = 0; // 成功后清零失败计数
           logger.info(`[${this.account.showType}] ✅ 登录成功，UID: ${this.uid}, baseUrl: ${this.baseUrl}`);
           return true;
         }
 
         if (loginResponse.msg === '109') {
           logger.warn(`[${this.account.showType}] ⚠️ 需要修改密码`);
+          this.handleLoginFailure('需要修改密码');
           return false;
         }
 
-        logger.error(`[${this.account.showType}] ❌ 登录失败: ${loginResponse.msg || loginResponse.err || '未知错误'}`);
+        const msg = loginResponse.msg || loginResponse.err || '未知错误';
+        logger.error(`[${this.account.showType}] ❌ 登录失败: ${msg}`);
+        this.handleLoginFailure(msg);
         return false;
       } catch (error: any) {
         const status = error?.response?.status;
@@ -448,11 +458,13 @@ export class CrownScraper {
         }
 
         // 其他错误不再重试
+        this.handleLoginFailure(errorMsg || code || '未知异常');
         return false;
       }
     }
 
     // 所有候选都失败
+    this.handleLoginFailure('所有基础域名登录失败');
     return false;
   }
 
@@ -1398,6 +1410,35 @@ export class CrownScraper {
       this.lastSuspensionLog = { context, time: now };
     }
     return true;
+  }
+
+  /**
+   * 记录一次登录失败，并在连续失败达到阈值后触发账号冷却
+   */
+  private handleLoginFailure(reason: string): void {
+    this.loginFailCount++;
+
+    const thresholdRaw = process.env.LOGIN_FAIL_THRESHOLD || '5';
+    const cooldownMinutesRaw = process.env.LOGIN_FAIL_COOLDOWN_MINUTES || '30';
+    const threshold = Number(thresholdRaw);
+    const cooldownMinutes = Number(cooldownMinutesRaw);
+
+    if (!Number.isFinite(threshold) || threshold <= 0) {
+      return;
+    }
+
+    if (this.loginFailCount < threshold) {
+      return;
+    }
+
+    this.loginFailCount = 0; // 触发一次冷却后重置计数
+
+    if (!Number.isFinite(cooldownMinutes) || cooldownMinutes <= 0) {
+      return;
+    }
+
+    const durationMs = cooldownMinutes * 60 * 1000;
+    this.suspendAccount(durationMs, `连续登录失败超过阈值(${threshold})：${reason}`);
   }
 
   private suspendAccount(durationMs: number, reason: string): void {

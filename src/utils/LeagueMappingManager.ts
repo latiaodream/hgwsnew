@@ -6,9 +6,16 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { LeagueMapping, LeagueMappingData } from '../types/league-mapping';
-import logger from './logger';
 import { LeagueMappingRepository } from '../repositories/LeagueMappingRepository';
 import { buildNameVariants } from './nameNormalizer';
+
+// 为了减少日志噪音，这个 Manager 内部不再输出任何日志
+const logger = {
+  info: (..._args: any[]) => {},
+  warn: (..._args: any[]) => {},
+  error: (..._args: any[]) => {},
+  debug: (..._args: any[]) => {},
+};
 
 export class LeagueMappingManager {
   private mappingFilePath: string;
