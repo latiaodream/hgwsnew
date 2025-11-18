@@ -360,10 +360,18 @@ export class CrownScraper {
       try {
         logger.info(`[${this.account.showType}] 🔐 开始登录: ${this.account.username} @ ${this.baseUrl}`);
 
-        // 预热（首页 + /app/member/...）
-        try {
-          await this.warmUp();
-        } catch (_) { /* 忽略 */ }
+        const disableWarmup = (process.env.DISABLE_WARMUP || '').toLowerCase();
+        const isWarmupDisabled = ['1', 'true', 'yes', 'on'].includes(disableWarmup);
+
+        if (!isWarmupDisabled) {
+          try {
+            await this.warmUp();
+          } catch (_) {
+            // 忽略预热失败
+          }
+        } else {
+          logger.debug(`[${this.account.showType}] 跳过预热 (DISABLE_WARMUP=1)`);
+        }
 
         // 获取最新版本号
         await this.getVersion();
