@@ -203,6 +203,10 @@ class Application {
   private loadAccounts(): AccountConfig[] {
     const accounts: AccountConfig[] = [];
 
+    // 1) 从配置文件加载（可选）
+    this.appendAccountsFromFile(accounts);
+
+    // 2) 从环境变量加载单账号
     this.appendSingleAccount(
       accounts,
       'live',
@@ -225,11 +229,52 @@ class Application {
       '早盘账号'
     );
 
+    // 3) 从账号池加载
     this.appendAccountPool(accounts, 'live', process.env.LIVE_ACCOUNT_POOL, '滚球账号池');
     this.appendAccountPool(accounts, 'today', process.env.TODAY_ACCOUNT_POOL, '今日账号池');
     this.appendAccountPool(accounts, 'early', process.env.EARLY_ACCOUNT_POOL, '早盘账号池');
 
     return accounts;
+  }
+
+  /**
+   * 从 accounts.json 或指定配置文件加载账号
+   */
+  private appendAccountsFromFile(accounts: AccountConfig[]): void {
+    const filePath = process.env.ACCOUNTS_FILE || path.join(process.cwd(), 'accounts.json');
+    if (!fs.existsSync(filePath)) {
+      return;
+    }
+
+    try {
+      const raw = fs.readFileSync(filePath, 'utf-8');
+      const parsed = JSON.parse(raw);
+      const list = Array.isArray(parsed) ? parsed : parsed?.accounts;
+      if (!Array.isArray(list)) {
+        logger.warn(`[Accounts] ${filePath} 格式无效，期望为数组或 { accounts: [] }`);
+        return;
+      }
+
+      const validShowTypes: ShowType[] = ['live', 'today', 'early'];
+
+      list.forEach((item: any, idx: number) => {
+        if (!item) return;
+        const username = String(item.username || '').trim();
+        const password = String(item.password || '').trim();
+        const showType = item.showType as ShowType;
+        if (!username || !password || !showType || !validShowTypes.includes(showType)) {
+          logger.warn(`[Accounts] 配置文件中的账号无效(#${idx + 1})`);
+          return;
+        }
+        const proxyUrl = item.proxyUrl ? String(item.proxyUrl).trim() : undefined;
+        accounts.push({ username, password, showType, proxyUrl });
+        logger.info(
+          `✅ 从配置文件加载账号(${showType}): ${username}${proxyUrl ? ' (带代理)' : ''}`
+        );
+      });
+    } catch (error: any) {
+      logger.error(`[Accounts] 读取配置文件失败: ${error?.message || error}`);
+    }
   }
 
   private appendSingleAccount(
