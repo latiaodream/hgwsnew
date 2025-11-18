@@ -643,14 +643,21 @@ export class CrownScraper {
   private async enrichMatchesWithMoreMarkets(matches: Match[]): Promise<void> {
     if (!Array.isArray(matches) || matches.length === 0) return;
 
+    // 先筛选出明确有更多盘口的赛事（MORE > 0）
+    const candidates = matches.filter(match => this.hasMoreMarketsFlag(match));
+    if (candidates.length === 0) {
+      logger.debug(`[${this.account.showType}] 当前没有标记 MORE>0 的赛事，跳过更多盘口抓取`);
+      return;
+    }
+
     const limitEnv = process.env.MORE_MARKETS_LIMIT;
-    let maxCount = matches.length;
+    let maxCount = candidates.length;
 
     if (limitEnv !== undefined) {
       const parsedLimit = Number(limitEnv);
       if (Number.isFinite(parsedLimit)) {
         if (parsedLimit > 0) {
-          maxCount = Math.min(parsedLimit, matches.length);
+          maxCount = Math.min(parsedLimit, candidates.length);
         } else if (parsedLimit < 0) {
           logger.debug(`[${this.account.showType}] MORE_MARKETS_LIMIT < 0, 跳过更多盘口抓取`);
           return;
@@ -658,7 +665,7 @@ export class CrownScraper {
       }
     }
 
-    const targets = matches.slice(0, maxCount);
+    const targets = candidates.slice(0, maxCount);
 
     for (const match of targets) {
       if (this.isSuspended()) {
@@ -1551,6 +1558,18 @@ export class CrownScraper {
     base.push({ label: 'gid only zh-tw', useEcid: false, useGid: true, includeLid: false, langx: 'zh-tw' });
 
     return base;
+  }
+
+  private hasMoreMarketsFlag(match: Match): boolean {
+    const raw = (match as any)?.raw || {};
+    const game = raw.game || raw.league?.game || raw;
+    if (!game) return false;
+
+    const moreValue = game.MORE ?? game.more;
+    if (moreValue === undefined || moreValue === null || moreValue === '') return false;
+
+    const n = Number(moreValue);
+    return Number.isFinite(n) && n > 0;
   }
 
   private resolveStartDelay(): number {
