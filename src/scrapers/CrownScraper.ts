@@ -931,6 +931,18 @@ export class CrownScraper {
             },
           };
 
+          // 直接从 get_game_list 的 game 字段解析基础盘（独赢/让球/大小球）
+          const markets = this.parseOdds(game);
+          if (markets && (
+            markets.moneyline ||
+            markets.full?.handicapLines?.length ||
+            markets.full?.overUnderLines?.length ||
+            markets.half?.handicapLines?.length ||
+            markets.half?.overUnderLines?.length
+          )) {
+            match.markets = markets;
+          }
+
           matches.push(match);
         } catch (error: any) {
           logger.warn(`[${this.account.showType}] 解析赛事失败:`, error.message);
