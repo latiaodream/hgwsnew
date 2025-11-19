@@ -234,8 +234,10 @@ export class CrownScraper {
     }
 
     // 内置备用域名（仅在未配置环境变量时使用）
+    // hga050.com 放在第一位，因为测试确认可用
     const builtins = [
-      'https://hga026.com', 'https://hga027.com', 'https://hga030.com', 'https://hga035.com', 'https://hga038.com', 'https://hga039.com', 'https://hga050.com',
+      'https://hga050.com',
+      'https://hga026.com', 'https://hga027.com', 'https://hga030.com', 'https://hga035.com', 'https://hga038.com', 'https://hga039.com',
       'https://mos011.com', 'https://mos022.com', 'https://mos033.com', 'https://mos055.com', 'https://mos066.com', 'https://mos100.com'
     ];
     return builtins;
@@ -267,8 +269,10 @@ export class CrownScraper {
     }
 
     // 内置备用域名（仅在未配置环境变量时使用）
+    // hga050.com 放在第一位，因为测试确认可用
     const builtins = [
-      'https://hga026.com', 'https://hga027.com', 'https://hga030.com', 'https://hga035.com', 'https://hga038.com', 'https://hga039.com', 'https://hga050.com',
+      'https://hga050.com',
+      'https://hga026.com', 'https://hga027.com', 'https://hga030.com', 'https://hga035.com', 'https://hga038.com', 'https://hga039.com',
       'https://mos011.com', 'https://mos022.com', 'https://mos033.com', 'https://mos055.com', 'https://mos066.com', 'https://mos100.com'
     ];
     return builtins;
@@ -288,7 +292,7 @@ export class CrownScraper {
     }
 
     // 直接使用默认版本号（皇冠首页需要 JS 跳转，无法直接获取版本号）
-    this.version = '2025-11-06-phPasscodeBug_121';
+    this.version = '2025-10-16-fix342_120';
     logger.debug(`[${this.account.showType}] 使用默认版本号: ${this.version}`);
   }
 
@@ -398,7 +402,7 @@ export class CrownScraper {
         // 构建请求参数
         const params = new URLSearchParams({
           p: 'chk_login',
-          langx: 'zh-cn',  // 使用简体中文版本
+          langx: 'zh-tw',  // 使用繁体中文版本（与投注系统一致）
           ver: this.version,
           username: this.account.username,
           password: this.account.password,
