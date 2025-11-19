@@ -1262,47 +1262,6 @@ export class CrownScraper {
       }
     }
 
-    // 记录已存在的全场大小盘口，避免重复（包括主盘口）
-    const existingOuHdps = new Set<number>();
-    if (markets.full?.overUnderLines) {
-      for (const line of markets.full.overUnderLines) {
-        if (line && typeof (line as any).hdp === 'number') {
-          existingOuHdps.add((line as any).hdp as number);
-        }
-      }
-    }
-
-    // 全场大小球 - HO/CO 盘口（滚球列表中的附加线）
-    const ratioROUHO = pick(['ratio_rouho', 'RATIO_ROUHO']);
-    const ratioROUHU = pick(['ratio_rouhu', 'RATIO_ROUHU']);
-    const iorROUHO = pick(['ior_rouho', 'IOR_ROUHO']);
-    const iorROUHU = pick(['ior_rouhu', 'IOR_ROUHU']);
-
-    const ratioROUCO = pick(['ratio_rouco', 'RATIO_ROUCO']);
-    const ratioROUCU = pick(['ratio_roucu', 'RATIO_ROUCU']);
-    const iorROUCO = pick(['ior_rouco', 'IOR_ROUCO']);
-    const iorROUCU = pick(['ior_roucu', 'IOR_ROUCU']);
-
-    const pushAltOu = (ratio: any, over: any, under: any) => {
-      const hdp = this.parseHandicap(ratio);
-      if (hdp !== null && markets.full?.overUnderLines && !existingOuHdps.has(hdp)) {
-        markets.full.overUnderLines.push({
-          hdp,
-          over: this.parseOddsValue(over) || 0,
-          under: this.parseOddsValue(under) || 0,
-        });
-        existingOuHdps.add(hdp);
-      }
-    };
-
-    if (ratioROUHO || ratioROUHU || iorROUHO || iorROUHU) {
-      pushAltOu(ratioROUHO || ratioROUHU, iorROUHO, iorROUHU);
-    }
-    if (ratioROUCO || ratioROUCU || iorROUCO || iorROUCU) {
-      pushAltOu(ratioROUCO || ratioROUCU, iorROUCO, iorROUCU);
-    }
-
-
     // 全场大小球 - A/B/C/D/E/F 盘口
     const ouPrefixes = ['a', 'b', 'c', 'd', 'e', 'f'];
     for (const prefix of ouPrefixes) {
