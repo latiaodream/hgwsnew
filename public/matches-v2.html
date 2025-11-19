@@ -124,9 +124,64 @@
                 case 'full_data':
                     handleFullData(message.data);
                     break;
+                case 'match_add':
+                    handleMatchAdd(message.data);
+                    break;
+                case 'match_update':
+                case 'odds_update':
+                case 'score_update':
+                    handleMatchUpdate(message.data);
+                    break;
+                case 'match_remove':
+                    handleMatchRemove(message.data);
+                    break;
                 default:
                     break;
             }
+        }
+
+        function handleMatchAdd(payload = {}) {
+            const showType = payload.showType;
+            const match = payload.match;
+            if (!showType || !match || !match.gid) return;
+            const list = matchesData[showType] || [];
+            const index = list.findIndex(m => m.gid === match.gid);
+            if (index >= 0) {
+                list[index] = match;
+            } else {
+                list.push(match);
+            }
+            matchesData[showType] = list;
+            updateCount(showType, list.length);
+            if (showType === currentType) renderMatches();
+        }
+
+        function handleMatchUpdate(payload = {}) {
+            const showType = payload.showType;
+            const match = payload.match;
+            const gid = (match && match.gid) || payload.gid;
+            if (!showType || !gid) return;
+            const list = matchesData[showType] || [];
+            const index = list.findIndex(m => m.gid === gid);
+            if (index >= 0) {
+                list[index] = match ? { ...list[index], ...match } : list[index];
+            } else if (match) {
+                list.push(match);
+            }
+            matchesData[showType] = list;
+            updateCount(showType, list.length);
+            if (showType === currentType) renderMatches();
+        }
+
+        function handleMatchRemove(payload = {}) {
+            const showType = payload.showType;
+            const gid = payload.gid;
+            if (!showType || !gid) return;
+            const list = matchesData[showType] || [];
+            const next = list.filter(m => m.gid !== gid);
+            matchesData[showType] = next;
+            updateCount(showType, next.length);
+            if (showType === currentType) renderMatches();
         }
 
         function handleHeartbeat(data = {}) {
