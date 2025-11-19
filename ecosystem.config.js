@@ -9,6 +9,7 @@ module.exports = {
       max_memory_restart: '500M',
       env: {
         NODE_ENV: 'production',
+        ENABLE_MORE_MARKETS: '1',
       },
       error_file: './logs/pm2-error.log',
       out_file: './logs/pm2-out.log',
