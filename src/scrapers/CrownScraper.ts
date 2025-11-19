@@ -100,10 +100,18 @@ export class CrownScraper {
       }
     );
 
-    this.enableMoreMarkets = this.resolveMoreMarketsFlag();
+    // live 默认强制开启更多盘口，today/early 仍然由环境变量控制
+    const autoEnableForLive = this.account.showType === 'live';
+    this.enableMoreMarkets = autoEnableForLive || this.resolveMoreMarketsFlag();
     this.moreMarketsStartDelayMs = this.resolveStartDelay();
     this.moreMarketsIntervalMs = this.resolveThrottleInterval();
     this.maxConcurrentMoreMarkets = this.resolveConcurrentLimit();
+
+    if (this.enableMoreMarkets) {
+      logger.info(`[${this.account.showType}] 已启用更多盘口抓取 (enableMoreMarkets=${this.enableMoreMarkets}, autoByShowType=${autoEnableForLive})`);
+    } else {
+      logger.info(`[${this.account.showType}] 未启用更多盘口抓取 (enableMoreMarkets=${this.enableMoreMarkets}, autoByShowType=${autoEnableForLive})`);
+    }
 
     // 添加请求拦截器来自动发送 Cookie
     this.client.interceptors.request.use(
