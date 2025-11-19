@@ -732,10 +732,23 @@ export class CrownScraper {
         await new Promise(resolve => setTimeout(resolve, this.moreMarketsIntervalMs - diff));
       }
 
+      let extraMarkets: Markets | null = null;
+
       const moreMarkets = await this.fetchMoreMarkets(match);
       if (moreMarkets) {
-        match.markets = this.mergeMarkets(match.markets || {}, moreMarkets);
+        extraMarkets = moreMarkets;
+      } else if (match.showType === 'live' && this.hasMoreMarketsFlag(match)) {
+        // 对于 live 且 MORE>0 的赛事，再尝试一次 get_game_OBT（浏览器前端使用的多盘口接口）
+        const obtMarkets = await this.fetchObtMarkets(match);
+        if (obtMarkets) {
+          extraMarkets = obtMarkets;
+        }
       }
+
+      if (extraMarkets) {
+        match.markets = this.mergeMarkets(match.markets || {}, extraMarkets);
+      }
+
       await new Promise(resolve => setTimeout(resolve, 120));
     }
   }
@@ -960,6 +973,120 @@ export class CrownScraper {
       this.inflightMoreMarkets = Math.max(0, this.inflightMoreMarkets - 1);
     }
   }
+
+
+  private async fetchObtMarkets(match: Match): Promise<Markets | null> {
+    if (this.shouldSkipBecauseSuspended('get_game_OBT')) {
+      return null;
+    }
+    if (!match?.gid) return null;
+    if (!this.isLoggedIn) {
+      const loginSuccess = await this.login();
+      if (!loginSuccess) {
+        return null;
+      }
+    }
+
+    try {
+      this.inflightMoreMarkets++;
+      const isLive = match.showType === 'live';
+      const ecid =
+        match.raw?.game?.ECID ||
+        match.raw?.game?.ecid ||
+        match.raw?.league?.ECID ||
+        match.raw?.league?.ecid ||
+        match.raw?.ECID ||
+        match.raw?.ecid;
+
+      if (!ecid) {
+        return null;
+      }
+
+      const params = new URLSearchParams({
+        uid: this.uid,
+        ver: this.version,
+        langx: 'zh-cn',
+        p: 'get_game_OBT',
+        gtype: 'ft',
+        showtype: isLive ? 'live' : match.showType,
+        isSpecial: '',
+        isEarly: isLive ? 'N' : (match.showType === 'early' ? 'Y' : 'N'),
+        model: 'ROU|MIX',
+        isETWI: 'N',
+        ecid: String(ecid),
+        ltype: '3',
+        is_rb: isLive ? 'Y' : 'N',
+        ts: Date.now().toString(),
+        isClick: 'Y',
+      });
+
+      const response = await this.postTransform(params.toString(), {
+        headers: {
+          Cookie: this.cookies,
+        },
+      });
+
+      this.lastMoreMarketTs = Date.now();
+
+      // 调试：把 OBT 的原始返回挂到 raw.obtRaw，方便通过 /api/matches/:gid 查看结构
+      try {
+        let rawText: string | null = null;
+        if (typeof response.data === 'string') {
+          rawText = response.data;
+        } else if (Buffer.isBuffer(response.data)) {
+          rawText = response.data.toString('utf8');
+        }
+        if (rawText) {
+          (match as any).raw = (match as any).raw || {};
+          (match as any).raw.obtRaw = rawText.slice(0, 4000);
+        }
+      } catch {
+        // ignore
+      }
+
+      const risk = this.detectRiskResponse(response.data);
+      if (risk) {
+        this.handleRiskyResponse(risk, `get_game_OBT/${match.showType}`);
+        return null;
+      }
+
+      const text = typeof response.data === 'string' ? response.data : '';
+      if (!text || !text.includes('<game')) {
+        return null;
+      }
+
+      let parsed;
+      try {
+        parsed = await this.parseXmlResponse(response.data);
+      } catch (error: any) {
+        logger.warn(
+          `[${this.account.showType}] 解析 get_game_OBT XML 失败 (GID: ${match.gid}): ${error?.message || error}`
+        );
+        return null;
+      }
+
+      const serverResponse = parsed?.serverresponse || parsed;
+      const markets = this.parseMoreMarkets(serverResponse);
+      if (markets) {
+        try {
+          (match as any).raw = (match as any).raw || {};
+          (match as any).raw.obt = serverResponse;
+        } catch {
+          // ignore
+        }
+        return markets;
+      }
+
+      return null;
+    } catch (error: any) {
+      const msg = error?.message || String(error);
+      logger.warn(`[${this.account.showType}] get_game_OBT 调用失败 (GID: ${match.gid}): ${msg}`);
+      return null;
+    } finally {
+      this.inflightMoreMarkets = Math.max(0, this.inflightMoreMarkets - 1);
+    }
+  }
+
 
 
 
