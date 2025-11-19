@@ -178,7 +178,7 @@ export class ScraperManager extends EventEmitter {
 
       logger.info('✅ 账号登录成功，开始抓取数据');
 
-      // 开始抓取所有类型的数据（每5秒轮询一次）
+      // 开始抓取所有类型的数据
       await this.startFetchingAllTypes();
 
     } catch (error: any) {
@@ -187,29 +187,43 @@ export class ScraperManager extends EventEmitter {
   }
 
   /**
-   * 开始抓取所有类型的数据（每5秒轮询一次）
+   * 开始抓取所有类型的数据（优化：使用递归 setTimeout）
    */
   private async startFetchingAllTypes(): Promise<void> {
     // 清除之前的抓取定时器
     for (const showType of this.showTypeQueue) {
       const timer = this.intervals.get(showType);
       if (timer) {
-        clearInterval(timer);
+        clearTimeout(timer); // 使用 clearTimeout
         this.intervals.delete(showType);
       }
     }
 
-    // 为每个类型设置独立的抓取定时器
+    // 为每个类型设置独立的抓取循环
     for (const showType of this.showTypeQueue) {
-      // 立即执行一次
-      await this.fetchType(showType);
+      const runLoop = async () => {
+        // 如果定时器已被清除（说明被停止了），则不再继续
+        if (!this.intervals.has(showType)) return;
 
-      // 设置定时任务
-      const timer = setInterval(async () => {
-        await this.fetchType(showType);
-      }, this.getInterval(showType) * 1000);
+        try {
+          await this.fetchType(showType);
+        } catch (error) {
+          logger.error(`[${showType}] 轮询抓取异常:`, error);
+        }
 
-      this.intervals.set(showType, timer);
+        // 再次检查是否被停止
+        if (!this.intervals.has(showType)) return;
+
+        // 安排下一次抓取
+        const interval = this.getInterval(showType);
+        const timer = setTimeout(runLoop, interval * 1000);
+        this.intervals.set(showType, timer);
+      };
+
+      // 立即启动循环（先设置一个占位符，防止 runLoop 刚开始就被认为已停止）
+      // 注意：这里我们用一个立即执行的 timeout 作为初始句柄
+      const initialTimer = setTimeout(runLoop, 0);
+      this.intervals.set(showType, initialTimer);
     }
   }
 
@@ -293,7 +307,7 @@ export class ScraperManager extends EventEmitter {
   }
 
   /**
-   * 启动指定类型的抓取器
+   * 启动指定类型的抓取器（优化：使用递归 setTimeout）
    */
   async start(showType: ShowType): Promise<void> {
     const scraper = this.scrapers.get(showType);
@@ -321,16 +335,30 @@ export class ScraperManager extends EventEmitter {
       return;
     }
 
-    // 立即执行一次
-    await this.fetchAndUpdate(showType);
+    // 定义递归循环函数
+    const runLoop = async () => {
+      // 检查是否被停止（通过检查 status.isRunning）
+      if (!this.status.get(showType)?.isRunning) return;
 
-    // 设置定时任务
-    const interval = this.getInterval(showType);
-    const timer = setInterval(async () => {
-      await this.fetchAndUpdate(showType);
-    }, interval * 1000);
+      try {
+        await this.fetchAndUpdate(showType);
+      } catch (error) {
+        logger.error(`[${showType}] 抓取循环异常:`, error);
+      }
 
-    this.intervals.set(showType, timer);
+      // 再次检查是否被停止
+      if (!this.status.get(showType)?.isRunning) return;
+
+      // 安排下一次抓取
+      const interval = this.getInterval(showType);
+      const timer = setTimeout(runLoop, interval * 1000);
+      this.intervals.set(showType, timer);
+    };
+
+    // 立即启动循环
+    // 使用 setTimeout(..., 0) 确保 timer ID 被正确存入 intervals
+    const initialTimer = setTimeout(runLoop, 0);
+    this.intervals.set(showType, initialTimer);
   }
 
   /**
@@ -339,7 +367,7 @@ export class ScraperManager extends EventEmitter {
   stop(showType: ShowType): void {
     const timer = this.intervals.get(showType);
     if (timer) {
-      clearInterval(timer);
+      clearTimeout(timer); // Changed from clearInterval
       this.intervals.delete(showType);
       logger.info(`停止抓取器: ${showType}`);
     }
