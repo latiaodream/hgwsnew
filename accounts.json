@@ -3,7 +3,7 @@
     "showType": "live",
     "username": "hg409606",
     "password": "U0YpS9Uv",
-    "proxyUrl": "http://iVStZvxipIrWS4L:yuafFw04RJ86mzw@92.113.192.72:43149"
+    "proxyUrl": "socks5://233blog:233blog.com@47.243.157.106:51070"
   },
   {
     "showType": "live",
@@ -12,13 +12,13 @@
     "proxyUrl": "socks5://aVhZ526kfBkv0NR:DW7LPhiEcZ0QnDW@91.124.222.142:48651"
   },
   {
-    "showType": "live",
+    "showType": "today",
     "username": "hg387962",
     "password": "xGeZj3fx",
     "proxyUrl": "socks5://tGKuOvhHLnyNJoS:HXJAmTjd6SFnHa9@91.124.222.111:45610"
   },
   {
-    "showType": "live",
+    "showType": "early",
     "username": "hg841992",
     "password": "YW07Z7lu",
     "proxyUrl": "socks5://jBfJH0yBSdDgR1t:mEiIrAOJbzOW7F3@92.113.192.141:43276"

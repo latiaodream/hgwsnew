@@ -792,69 +792,120 @@ export class CrownScraper {
       const attempts = this.buildMoreMarketAttempts(ecid, lid);
 
       for (const attempt of attempts) {
-        const params = new URLSearchParams({
-          uid: this.uid,
-          ver: this.version,
-          langx: attempt.langx || 'zh-cn',
-          p: 'get_game_more',
-          gtype: 'FT',
-          showtype: isLive ? 'live' : match.showType,
-          ltype: '3',
-          isRB: isLive ? 'Y' : 'N',
-          from: 'game_more',
-          mode: 'NORMAL',
-          filter: 'All',
-          ts: Date.now().toString(),
-        });
+        const attemptLabel = attempt.label || 'unknown';
+        const maxRetries = 2;
 
-        if (attempt.includeLid !== false && lid) {
-          params.set('lid', String(lid));
-        }
-        if (attempt.useEcid && ecid) {
-          params.set('ecid', String(ecid));
-        }
-        if (attempt.useGid !== false) {
-          params.set('gid', match.gid);
-        }
+        for (let retry = 1; retry <= maxRetries; retry++) {
+          try {
+            const params = new URLSearchParams({
+              uid: this.uid,
+              ver: this.version,
+              langx: attempt.langx || 'zh-cn',
+              p: 'get_game_more',
+              gtype: 'ft', // 与文档示例保持一致
+              showtype: isLive ? 'live' : match.showType,
+              ltype: '3',
+              isRB: isLive ? 'Y' : 'N',
+              from: 'game_more',
+              mode: 'NORMAL',
+              filter: 'Main', // 只拉主要盘口，响应更小，减少超时/断连
+              specialClick: '',
+              ts: Date.now().toString(),
+            });
 
-        const response = await this.postTransform(params.toString(), {
-          headers: {
-            'Cookie': this.cookies,
-          },
-        });
+            if (attempt.includeLid !== false && lid) {
+              params.set('lid', String(lid));
+            }
+            if (attempt.useEcid && ecid) {
+              params.set('ecid', String(ecid));
+            }
+            if (attempt.useGid !== false) {
+              params.set('gid', match.gid);
+            }
 
-        this.lastMoreMarketTs = Date.now();
+            const response = await this.postTransform(params.toString(), {
+              headers: {
+                'Cookie': this.cookies,
+              },
+            });
 
-        const risk = this.detectRiskResponse(response.data);
-        if (risk) {
-          this.handleRiskyResponse(risk, `get_game_more/${match.showType}`);
-          return null;
-        }
+            this.lastMoreMarketTs = Date.now();
 
-        const text = typeof response.data === 'string' ? response.data : '';
-        if (!text || !text.includes('<game')) {
-          continue;
-        }
+            const risk = this.detectRiskResponse(response.data);
+            if (risk) {
+              this.handleRiskyResponse(risk, `get_game_more/${match.showType}`);
+              return null;
+            }
 
-        let parsed;
-        try {
-          parsed = await this.parseXmlResponse(response.data);
-        } catch (error: any) {
-          logger.warn(`[${this.account.showType}] 解析 get_game_more XML 失败 (GID: ${match.gid}): ${error?.message || error}`);
-          continue;
-        }
+            const text = typeof response.data === 'string' ? response.data : '';
+            if (!text || !text.includes('<game')) {
+              // 当前尝试没有返回有效盘口，换下一个组合
+              break;
+            }
 
-        const serverResponse = parsed?.serverresponse || parsed;
-        const markets = this.parseMoreMarkets(serverResponse);
-        if (markets) {
-          return markets;
+            let parsed;
+            try {
+              parsed = await this.parseXmlResponse(response.data);
+            } catch (error: any) {
+              logger.warn(
+                `[${this.account.showType}] 解析 get_game_more XML 失败 (GID: ${match.gid}, attempt=${attemptLabel}): ${
+                  error?.message || error
+                }`
+              );
+              // 当前 attempt 没解析成功，换下一个组合
+              break;
+            }
+
+            const serverResponse = parsed?.serverresponse || parsed;
+            const markets = this.parseMoreMarkets(serverResponse);
+            if (markets) {
+              return markets;
+            }
+
+            // 正常返回但没有解析到盘口，结束本 attempt，尝试下一个
+            break;
+          } catch (error: any) {
+            const msg = error?.message || String(error);
+            const code = (error as any)?.code;
+            const isTimeout = code === 'ECONNABORTED' || msg.includes('timeout');
+            const isSocketClosed =
+              msg.includes('Socket closed') ||
+              msg.includes('socket hang up') ||
+              code === 'ECONNRESET' ||
+              code === 'EPIPE';
+
+            if ((isTimeout || isSocketClosed) && retry < maxRetries) {
+              logger.warn(
+                `[${this.account.showType}] get_game_more 网络错误重试 (${attemptLabel}, GID: ${
+                  match.gid
+                }, retry=${retry}/${maxRetries}): ${msg}${code ? ` (${code})` : ''}`
+              );
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              continue;
+            }
+
+            // 非瞬时错误或已到最大重试次数，记录并放弃当前 attempt
+            logger.warn(
+              `[${this.account.showType}] get_game_more 调用失败 (${attemptLabel}, GID: ${
+                match.gid
+              }): ${msg}${code ? ` (${code})` : ''}`
+            );
+
+            if (error?.response?.status === 401 || msg.includes('登录')) {
+              this.isLoggedIn = false;
+            }
+
+            // 结束当前 attempt，继续下一个 attempts 组合
+            break;
+          }
         }
       }
 
       logger.warn(`[${this.account.showType}] get_game_more 多次尝试仍未获取到盘口 (GID: ${match.gid})`);
       return null;
     } catch (error: any) {
-      logger.warn(`[${this.account.showType}] 获取更多盘口失败 (GID: ${match.gid}): ${error.message}`);
+      const msg = error?.message || String(error);
+      logger.warn(`[${this.account.showType}] 获取更多盘口失败 (GID: ${match.gid}): ${msg}`);
       return null;
     } finally {
       this.inflightMoreMarkets = Math.max(0, this.inflightMoreMarkets - 1);
