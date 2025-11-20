@@ -764,7 +764,8 @@ export class CrownScraper {
       merged.moneyline = { ...(merged.moneyline || {}), ...incoming.moneyline };
     }
 
-    // 合并盘口数组时顺便去重，避免主盘口和更多盘口返回完全相同的行导致前端重复显示
+    // 合并盘口数组时顺便去重，避免主盘口和更多盘口返回完全相同的行导致前端重复显示。
+    // 对于同一个 hdp（盘口）同时出现在基础盘和更多盘口中时，优先使用新增的那条（一般来自 get_game_more/get_game_OBT）。
     const mergeLineArray = <T>(target?: T[], addition?: T[]): T[] | undefined => {
       const combined: T[] = [];
       if (target && target.length) combined.push(...target);
@@ -774,18 +775,19 @@ export class CrownScraper {
         return target;
       }
 
-      const seen = new Set<string>();
-      const result: T[] = [];
+      const map = new Map<string, T>();
 
       for (const item of combined) {
         if (item == null) continue;
-        const key = JSON.stringify(item);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        result.push(item);
+        const anyItem = item as any;
+        const hdpKey = anyItem && anyItem.hdp !== undefined && anyItem.hdp !== null
+          ? `hdp:${anyItem.hdp}`
+          : JSON.stringify(item);
+        // 后出现的（通常是 addition）覆盖先前的，这样更多盘口/OBT 的赔率会覆盖基础盘
+        map.set(hdpKey, item);
       }
 
-      return result;
+      return Array.from(map.values());
     };
 
     if (incoming.full) {
@@ -1573,9 +1575,43 @@ export class CrownScraper {
         return false;
       };
 
+      /**
+       * 根据 STRONG/HSTRONG 调整盘口方向：
+       * - 比如 STRONG = 'H' 且 RATIO_RE = 0.25，则主队让 0.25，我们对外展示为 -0.25；
+       * - STRONG = 'C' 时主队受让 0.25，对外展示为 +0.25。
+       * 如果原始 ratio 字符串里已经带有正负号，则尊重原始符号不再二次翻转。
+       */
+      const normalizeHdpWithStrong = (
+        rawHdp: number | null,
+        ratioRaw: string | undefined,
+        strong?: string,
+      ): number | null => {
+        if (rawHdp === null) return null;
+        if (!ratioRaw) return rawHdp;
+        const ratioStr = String(ratioRaw);
+        // 已经包含正负号（例如 "-0.5/0"），认为已经是最终方向
+        if (/[+-]/.test(ratioStr)) {
+          return rawHdp;
+        }
+        if (!strong) {
+          return rawHdp;
+        }
+        const s = strong.toUpperCase();
+        if (s === 'H') {
+          return -rawHdp;
+        }
+        if (s === 'C') {
+          return rawHdp;
+        }
+        return rawHdp;
+      };
+
       for (const game of games) {
         if (!game) continue;
         if (isCardOrCornerMarket(game)) continue;
+
+        const strong = pickString(game, ['STRONG', 'strong']);
+        const halfStrong = pickString(game, ['HSTRONG', 'hstrong']);
 
         // 全场让球盘口 - 主盘口
         const ratioR = pickString(game, ['RATIO_RE', 'ratio_re', 'RE', 'R', 'ratio']);
@@ -1583,7 +1619,8 @@ export class CrownScraper {
         const iorRC = pickString(game, ['ior_REC', 'ior_RC']);
 
         if (ratioR && (iorRH || iorRC)) {
-          const hdp = this.parseHandicap(ratioR);
+          let hdp = this.parseHandicap(ratioR);
+          hdp = normalizeHdpWithStrong(hdp, ratioR, strong);
           if (hdp !== null) {
             markets.full!.handicapLines = markets.full!.handicapLines || [];
             markets.full!.handicapLines!.push({
@@ -1618,7 +1655,8 @@ export class CrownScraper {
             continue;
           }
 
-          const hdpAlt = this.parseHandicap(ratioAlt);
+          let hdpAlt = this.parseHandicap(ratioAlt);
+          hdpAlt = normalizeHdpWithStrong(hdpAlt, ratioAlt, strong);
           if (hdpAlt !== null) {
             const homeVal = this.parseOddsValue(iorAltH);
             const awayVal = this.parseOddsValue(iorAltC);
@@ -1706,7 +1744,8 @@ export class CrownScraper {
         const iorHRC = pickString(game, ['ior_HREC', 'ior_HRC']);
 
         if (ratioHR && (iorHRH || iorHRC)) {
-          const hdp = this.parseHandicap(ratioHR);
+          let hdp = this.parseHandicap(ratioHR);
+          hdp = normalizeHdpWithStrong(hdp, ratioHR, halfStrong);
           if (hdp !== null) {
             markets.half!.handicapLines = markets.half!.handicapLines || [];
             markets.half!.handicapLines!.push({
