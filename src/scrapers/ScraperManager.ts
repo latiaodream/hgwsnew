@@ -428,8 +428,25 @@ export class ScraperManager extends EventEmitter {
 
     if (!scraper) return;
 
-    // 不再检查账号暂停状态，按时间轮换即可
-    // 即使遇到风险提示也继续抓取，直到时间到了才换账号
+    // 如果当前账号已经被标记为冷却（例如返回非预期页面导致的 html_block），
+    // 并且该类型配置了账号池，则优先尝试立即轮换到下一个账号，避免长时间停抓。
+    const suspensionInfo = typeof scraper.getSuspensionInfo === 'function'
+      ? scraper.getSuspensionInfo()
+      : null;
+    const pool = this.accountPools.get(showType);
+    if (suspensionInfo && pool && pool.length > 1) {
+      logger.warn(
+        `[${showType}] 检测到当前账号处于冷却状态 (${suspensionInfo.reason || '未知原因'})，尝试立即轮换账号`
+      );
+      const rotated = await this.rotateAccountForShowType(showType, { skipRest: true });
+      if (rotated) {
+        // 轮换成功，本次抓取由新账号的定时任务继续，无需再用旧账号抓取
+        return;
+      }
+      logger.warn(
+        `[${showType}] 账号轮换失败或无可用账号池，将继续使用当前账号尝试抓取`
+      );
+    }
 
     try {
       logger.debug(`[${showType}] 开始抓取...`);
