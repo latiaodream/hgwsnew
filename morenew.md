@@ -1,0 +1,178 @@
+curl 'https://hga050.com/transform.php?ver=2025-11-06-phPasscodeBug_121' \
+  -H 'Accept: */*' \
+  -H 'Accept-Language: en,en-US;q=0.9,zh-HK;q=0.8,zh;q=0.7,zh-CN;q=0.6' \
+  -H 'Cache-Control: no-cache' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-type: application/x-www-form-urlencoded' \
+  -b 'box4pwd_notshow_39199455=MzkxOTk0NTVfWQ==; iorChgSw=WQ==; myGameVer_39199455=XzIxMTIyOA==; box4pwd_notshow_39278866=MzkyNzg4NjZfTg==; box4pwd_notshow_39097374=MzkwOTczNzRfTg==; CookieChk=WQ; box4pwd_notshow_39199404=MzkxOTk0MDRfTg==; protocolstr=aHR0cHM=; test=aW5pdA; myGameVer_39434015=XzIxMTIyOA==; ft_myGame_39434015=e30=; box4pwd_notshow_39434015=Mzk0MzQwMTVfWQ==; cu=Tg==; cuipv6=Tg==; ipv6=Tg==; login_39434015=MTc2MzczNTQxMg' \
+  -H 'Origin: https://hga050.com' \
+  -H 'Pragma: no-cache' \
+  -H 'Sec-Fetch-Dest: empty' \
+  -H 'Sec-Fetch-Mode: cors' \
+  -H 'Sec-Fetch-Site: same-origin' \
+  -H 'User-Agent: Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Mobile Safari/537.36' \
+  -H 'sec-ch-ua: "Chromium";v="142", "Google Chrome";v="142", "Not_A Brand";v="99"' \
+  -H 'sec-ch-ua-mobile: ?1' \
+  -H 'sec-ch-ua-platform: "Android"' \
+  --data-raw 'uid=nq3hnphg2m39434015l183452b0&ver=2025-11-06-phPasscodeBug_121&langx=zh-cn&p=get_game_more&gtype=ft&showtype=live&ltype=3&isRB=Y&lid=109191&specialClick=&mode=NORMAL&from=game_more&filter=Main&ts=1763734868812&ecid=10164223' ;
+curl 'https://hga050.com/transform.php?ver=2025-11-06-phPasscodeBug_121' \
+  -H 'Accept: */*' \
+  -H 'Accept-Language: en,en-US;q=0.9,zh-HK;q=0.8,zh;q=0.7,zh-CN;q=0.6' \
+  -H 'Cache-Control: no-cache' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-type: application/x-www-form-urlencoded' \
+  -b 'box4pwd_notshow_39199455=MzkxOTk0NTVfWQ==; iorChgSw=WQ==; myGameVer_39199455=XzIxMTIyOA==; box4pwd_notshow_39278866=MzkyNzg4NjZfTg==; box4pwd_notshow_39097374=MzkwOTczNzRfTg==; CookieChk=WQ; box4pwd_notshow_39199404=MzkxOTk0MDRfTg==; protocolstr=aHR0cHM=; test=aW5pdA; myGameVer_39434015=XzIxMTIyOA==; ft_myGame_39434015=e30=; box4pwd_notshow_39434015=Mzk0MzQwMTVfWQ==; cu=Tg==; cuipv6=Tg==; ipv6=Tg==; login_39434015=MTc2MzczNTQxMg' \
+  -H 'Origin: https://hga050.com' \
+  -H 'Pragma: no-cache' \
+  -H 'Sec-Fetch-Dest: empty' \
+  -H 'Sec-Fetch-Mode: cors' \
+  -H 'Sec-Fetch-Site: same-origin' \
+  -H 'User-Agent: Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Mobile Safari/537.36' \
+  -H 'sec-ch-ua: "Chromium";v="142", "Google Chrome";v="142", "Not_A Brand";v="99"' \
+  -H 'sec-ch-ua-mobile: ?1' \
+  -H 'sec-ch-ua-platform: "Android"' \
+  --data-raw 'uid=nq3hnphg2m39434015l183452b0&ver=2025-11-06-phPasscodeBug_121&langx=zh-cn&p=get_game_more&gtype=ft&showtype=live&ltype=3&isRB=Y&lid=109191&specialClick=&mode=NORMAL&from=game_more&filter=Main&ts=1763735459619&ecid=10164223' ;
+curl 'https://hga050.com/transform.php?ver=2025-11-06-phPasscodeBug_121' \
+  -H 'Accept: */*' \
+  -H 'Accept-Language: en,en-US;q=0.9,zh-HK;q=0.8,zh;q=0.7,zh-CN;q=0.6' \
+  -H 'Cache-Control: no-cache' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-type: application/x-www-form-urlencoded' \
+  -b 'box4pwd_notshow_39199455=MzkxOTk0NTVfWQ==; iorChgSw=WQ==; myGameVer_39199455=XzIxMTIyOA==; box4pwd_notshow_39278866=MzkyNzg4NjZfTg==; box4pwd_notshow_39097374=MzkwOTczNzRfTg==; CookieChk=WQ; box4pwd_notshow_39199404=MzkxOTk0MDRfTg==; protocolstr=aHR0cHM=; test=aW5pdA; myGameVer_39434015=XzIxMTIyOA==; ft_myGame_39434015=e30=; box4pwd_notshow_39434015=Mzk0MzQwMTVfWQ==; cu=Tg==; cuipv6=Tg==; ipv6=Tg==; login_39434015=MTc2MzczNTQxMg' \
+  -H 'Origin: https://hga050.com' \
+  -H 'Pragma: no-cache' \
+  -H 'Sec-Fetch-Dest: empty' \
+  -H 'Sec-Fetch-Mode: cors' \
+  -H 'Sec-Fetch-Site: same-origin' \
+  -H 'User-Agent: Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Mobile Safari/537.36' \
+  -H 'sec-ch-ua: "Chromium";v="142", "Google Chrome";v="142", "Not_A Brand";v="99"' \
+  -H 'sec-ch-ua-mobile: ?1' \
+  -H 'sec-ch-ua-platform: "Android"' \
+  --data-raw 'p=service_mainget&ver=2025-11-06-phPasscodeBug_121&&langx=zh-cn&uid=nq3hnphg2m39434015l183452b0&login=Y' ;
+curl 'https://hga050.com/transform.php?ver=2025-11-06-phPasscodeBug_121' \
+  -H 'Accept: */*' \
+  -H 'Accept-Language: en,en-US;q=0.9,zh-HK;q=0.8,zh;q=0.7,zh-CN;q=0.6' \
+  -H 'Cache-Control: no-cache' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-type: application/x-www-form-urlencoded' \
+  -b 'box4pwd_notshow_39199455=MzkxOTk0NTVfWQ==; iorChgSw=WQ==; myGameVer_39199455=XzIxMTIyOA==; box4pwd_notshow_39278866=MzkyNzg4NjZfTg==; box4pwd_notshow_39097374=MzkwOTczNzRfTg==; CookieChk=WQ; box4pwd_notshow_39199404=MzkxOTk0MDRfTg==; protocolstr=aHR0cHM=; test=aW5pdA; myGameVer_39434015=XzIxMTIyOA==; ft_myGame_39434015=e30=; box4pwd_notshow_39434015=Mzk0MzQwMTVfWQ==; cu=Tg==; cuipv6=Tg==; ipv6=Tg==; login_39434015=MTc2MzczNTQxMg' \
+  -H 'Origin: https://hga050.com' \
+  -H 'Pragma: no-cache' \
+  -H 'Sec-Fetch-Dest: empty' \
+  -H 'Sec-Fetch-Mode: cors' \
+  -H 'Sec-Fetch-Site: same-origin' \
+  -H 'User-Agent: Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Mobile Safari/537.36' \
+  -H 'sec-ch-ua: "Chromium";v="142", "Google Chrome";v="142", "Not_A Brand";v="99"' \
+  -H 'sec-ch-ua-mobile: ?1' \
+  -H 'sec-ch-ua-platform: "Android"' \
+  --data-raw 'uid=nq3hnphg2m39434015l183452b0&ver=2025-11-06-phPasscodeBug_121&langx=zh-cn&p=get_game_more&gtype=ft&showtype=live&ltype=3&isRB=Y&lid=109191&specialClick=&mode=NORMAL&from=game_more&filter=Main&ts=1763735459619&ecid=10164223' ;
+curl 'https://hga050.com/transform.php?ver=2025-11-06-phPasscodeBug_121' \
+  -H 'Accept: */*' \
+  -H 'Accept-Language: en,en-US;q=0.9,zh-HK;q=0.8,zh;q=0.7,zh-CN;q=0.6' \
+  -H 'Cache-Control: no-cache' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-type: application/x-www-form-urlencoded' \
+  -b 'box4pwd_notshow_39199455=MzkxOTk0NTVfWQ==; iorChgSw=WQ==; myGameVer_39199455=XzIxMTIyOA==; box4pwd_notshow_39278866=MzkyNzg4NjZfTg==; box4pwd_notshow_39097374=MzkwOTczNzRfTg==; CookieChk=WQ; box4pwd_notshow_39199404=MzkxOTk0MDRfTg==; protocolstr=aHR0cHM=; test=aW5pdA; myGameVer_39434015=XzIxMTIyOA==; ft_myGame_39434015=e30=; box4pwd_notshow_39434015=Mzk0MzQwMTVfWQ==; cu=Tg==; cuipv6=Tg==; ipv6=Tg==; login_39434015=MTc2MzczNTQxMg' \
+  -H 'Origin: https://hga050.com' \
+  -H 'Pragma: no-cache' \
+  -H 'Sec-Fetch-Dest: empty' \
+  -H 'Sec-Fetch-Mode: cors' \
+  -H 'Sec-Fetch-Site: same-origin' \
+  -H 'User-Agent: Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Mobile Safari/537.36' \
+  -H 'sec-ch-ua: "Chromium";v="142", "Google Chrome";v="142", "Not_A Brand";v="99"' \
+  -H 'sec-ch-ua-mobile: ?1' \
+  -H 'sec-ch-ua-platform: "Android"' \
+  --data-raw 'p=check_login_domain&ver=2025-11-06-phPasscodeBug_121&username=ca7asssv35&uid=nq3hnphg2m39434015l183452b0&langx=zh-cn&code=663' ;
+curl 'https://hga050.com/transform.php?ver=2025-11-06-phPasscodeBug_121' \
+  -H 'Accept: */*' \
+  -H 'Accept-Language: en,en-US;q=0.9,zh-HK;q=0.8,zh;q=0.7,zh-CN;q=0.6' \
+  -H 'Cache-Control: no-cache' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-type: application/x-www-form-urlencoded' \
+  -b 'box4pwd_notshow_39199455=MzkxOTk0NTVfWQ==; iorChgSw=WQ==; myGameVer_39199455=XzIxMTIyOA==; box4pwd_notshow_39278866=MzkyNzg4NjZfTg==; box4pwd_notshow_39097374=MzkwOTczNzRfTg==; CookieChk=WQ; box4pwd_notshow_39199404=MzkxOTk0MDRfTg==; protocolstr=aHR0cHM=; test=aW5pdA; myGameVer_39434015=XzIxMTIyOA==; ft_myGame_39434015=e30=; box4pwd_notshow_39434015=Mzk0MzQwMTVfWQ==; cu=Tg==; cuipv6=Tg==; ipv6=Tg==; login_39434015=MTc2MzczNTQxMg' \
+  -H 'Origin: https://hga050.com' \
+  -H 'Pragma: no-cache' \
+  -H 'Sec-Fetch-Dest: empty' \
+  -H 'Sec-Fetch-Mode: cors' \
+  -H 'Sec-Fetch-Site: same-origin' \
+  -H 'User-Agent: Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Mobile Safari/537.36' \
+  -H 'sec-ch-ua: "Chromium";v="142", "Google Chrome";v="142", "Not_A Brand";v="99"' \
+  -H 'sec-ch-ua-mobile: ?1' \
+  -H 'sec-ch-ua-platform: "Android"' \
+  --data-raw 'p=get_version&uid=nq3hnphg2m39434015l183452b0&langx=zh-cn' ;
+curl 'https://hga050.com/transform.php?ver=2025-11-06-phPasscodeBug_121' \
+  -H 'Accept: */*' \
+  -H 'Accept-Language: en,en-US;q=0.9,zh-HK;q=0.8,zh;q=0.7,zh-CN;q=0.6' \
+  -H 'Cache-Control: no-cache' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-type: application/x-www-form-urlencoded' \
+  -b 'box4pwd_notshow_39199455=MzkxOTk0NTVfWQ==; iorChgSw=WQ==; myGameVer_39199455=XzIxMTIyOA==; box4pwd_notshow_39278866=MzkyNzg4NjZfTg==; box4pwd_notshow_39097374=MzkwOTczNzRfTg==; CookieChk=WQ; box4pwd_notshow_39199404=MzkxOTk0MDRfTg==; protocolstr=aHR0cHM=; test=aW5pdA; myGameVer_39434015=XzIxMTIyOA==; ft_myGame_39434015=e30=; box4pwd_notshow_39434015=Mzk0MzQwMTVfWQ==; cu=Tg==; cuipv6=Tg==; ipv6=Tg==; login_39434015=MTc2MzczNTQ3Mw' \
+  -H 'Origin: https://hga050.com' \
+  -H 'Pragma: no-cache' \
+  -H 'Sec-Fetch-Dest: empty' \
+  -H 'Sec-Fetch-Mode: cors' \
+  -H 'Sec-Fetch-Site: same-origin' \
+  -H 'User-Agent: Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Mobile Safari/537.36' \
+  -H 'sec-ch-ua: "Chromium";v="142", "Google Chrome";v="142", "Not_A Brand";v="99"' \
+  -H 'sec-ch-ua-mobile: ?1' \
+  -H 'sec-ch-ua-platform: "Android"' \
+  --data-raw 'uid=nq3hnphg2m39434015l183452b0&ver=2025-11-06-phPasscodeBug_121&langx=zh-cn&p=get_game_more&gtype=ft&showtype=live&ltype=3&isRB=Y&lid=109191&specialClick=&mode=NORMAL&from=game_more&filter=RmixOU&ts=1763735473983&ecid=10164223' ;
+curl 'https://hga050.com/transform.php?ver=2025-11-06-phPasscodeBug_121' \
+  -H 'Accept: */*' \
+  -H 'Accept-Language: en,en-US;q=0.9,zh-HK;q=0.8,zh;q=0.7,zh-CN;q=0.6' \
+  -H 'Cache-Control: no-cache' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-type: application/x-www-form-urlencoded' \
+  -b 'box4pwd_notshow_39199455=MzkxOTk0NTVfWQ==; iorChgSw=WQ==; myGameVer_39199455=XzIxMTIyOA==; box4pwd_notshow_39278866=MzkyNzg4NjZfTg==; box4pwd_notshow_39097374=MzkwOTczNzRfTg==; CookieChk=WQ; box4pwd_notshow_39199404=MzkxOTk0MDRfTg==; protocolstr=aHR0cHM=; test=aW5pdA; myGameVer_39434015=XzIxMTIyOA==; ft_myGame_39434015=e30=; box4pwd_notshow_39434015=Mzk0MzQwMTVfWQ==; cu=Tg==; cuipv6=Tg==; ipv6=Tg==; login_39434015=MTc2MzczNTQ3Mw' \
+  -H 'Origin: https://hga050.com' \
+  -H 'Pragma: no-cache' \
+  -H 'Sec-Fetch-Dest: empty' \
+  -H 'Sec-Fetch-Mode: cors' \
+  -H 'Sec-Fetch-Site: same-origin' \
+  -H 'User-Agent: Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Mobile Safari/537.36' \
+  -H 'sec-ch-ua: "Chromium";v="142", "Google Chrome";v="142", "Not_A Brand";v="99"' \
+  -H 'sec-ch-ua-mobile: ?1' \
+  -H 'sec-ch-ua-platform: "Android"' \
+  --data-raw 'uid=nq3hnphg2m39434015l183452b0&ver=2025-11-06-phPasscodeBug_121&langx=zh-cn&p=get_game_more&gtype=ft&showtype=live&ltype=3&isRB=Y&lid=109191&specialClick=&mode=NORMAL&from=game_more&filter=RmixOU&ts=1763735473983&ecid=10164223' ;
+curl 'https://hga050.com/transform.php?ver=2025-11-06-phPasscodeBug_121' \
+  -H 'Accept: */*' \
+  -H 'Accept-Language: en,en-US;q=0.9,zh-HK;q=0.8,zh;q=0.7,zh-CN;q=0.6' \
+  -H 'Cache-Control: no-cache' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-type: application/x-www-form-urlencoded' \
+  -b 'box4pwd_notshow_39199455=MzkxOTk0NTVfWQ==; iorChgSw=WQ==; myGameVer_39199455=XzIxMTIyOA==; box4pwd_notshow_39278866=MzkyNzg4NjZfTg==; box4pwd_notshow_39097374=MzkwOTczNzRfTg==; CookieChk=WQ; box4pwd_notshow_39199404=MzkxOTk0MDRfTg==; protocolstr=aHR0cHM=; test=aW5pdA; myGameVer_39434015=XzIxMTIyOA==; ft_myGame_39434015=e30=; box4pwd_notshow_39434015=Mzk0MzQwMTVfWQ==; cu=Tg==; cuipv6=Tg==; ipv6=Tg==; login_39434015=MTc2MzczNTQ3Mw' \
+  -H 'Origin: https://hga050.com' \
+  -H 'Pragma: no-cache' \
+  -H 'Sec-Fetch-Dest: empty' \
+  -H 'Sec-Fetch-Mode: cors' \
+  -H 'Sec-Fetch-Site: same-origin' \
+  -H 'User-Agent: Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Mobile Safari/537.36' \
+  -H 'sec-ch-ua: "Chromium";v="142", "Google Chrome";v="142", "Not_A Brand";v="99"' \
+  -H 'sec-ch-ua-mobile: ?1' \
+  -H 'sec-ch-ua-platform: "Android"' \
+  --data-raw 'p=service_mainget&ver=2025-11-06-phPasscodeBug_121&&langx=zh-cn&uid=nq3hnphg2m39434015l183452b0&login=Y' ;
+curl 'https://hga050.com/transform.php?ver=2025-11-06-phPasscodeBug_121' \
+  -H 'Accept: */*' \
+  -H 'Accept-Language: en,en-US;q=0.9,zh-HK;q=0.8,zh;q=0.7,zh-CN;q=0.6' \
+  -H 'Cache-Control: no-cache' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-type: application/x-www-form-urlencoded' \
+  -b 'box4pwd_notshow_39199455=MzkxOTk0NTVfWQ==; iorChgSw=WQ==; myGameVer_39199455=XzIxMTIyOA==; box4pwd_notshow_39278866=MzkyNzg4NjZfTg==; box4pwd_notshow_39097374=MzkwOTczNzRfTg==; CookieChk=WQ; box4pwd_notshow_39199404=MzkxOTk0MDRfTg==; protocolstr=aHR0cHM=; test=aW5pdA; myGameVer_39434015=XzIxMTIyOA==; ft_myGame_39434015=e30=; box4pwd_notshow_39434015=Mzk0MzQwMTVfWQ==; cu=Tg==; cuipv6=Tg==; ipv6=Tg==; login_39434015=MTc2MzczNTQ3Mw' \
+  -H 'Origin: https://hga050.com' \
+  -H 'Pragma: no-cache' \
+  -H 'Sec-Fetch-Dest: empty' \
+  -H 'Sec-Fetch-Mode: cors' \
+  -H 'Sec-Fetch-Site: same-origin' \
+  -H 'User-Agent: Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Mobile Safari/537.36' \
+  -H 'sec-ch-ua: "Chromium";v="142", "Google Chrome";v="142", "Not_A Brand";v="99"' \
+  -H 'sec-ch-ua-mobile: ?1' \
+  -H 'sec-ch-ua-platform: "Android"' \
+  --data-raw 'uid=nq3hnphg2m39434015l183452b0&ver=2025-11-06-phPasscodeBug_121&langx=zh-cn&p=get_game_more&gtype=ft&showtype=live&ltype=3&isRB=Y&lid=109191&specialClick=&mode=NORMAL&from=game_more&filter=RmixOU&ts=1763735473983&ecid=10164223' ;
+curl 'https://hga050.com/transform.php?ver=2025-11-06-phPasscodeBug_121' \
+  -H 'sec-ch-ua-platform: "Android"' \
+  -H 'Referer;' \
+  -H 'User-Agent: Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Mobile Safari/537.36' \
+  -H 'sec-ch-ua: "Chromium";v="142", "Google Chrome";v="142", "Not_A Brand";v="99"' \
+  -H 'Content-type: application/x-www-form-urlencoded' \
+  -H 'sec-ch-ua-mobile: ?1' \
+  --data-raw 'uid=nq3hnphg2m39434015l183452b0&ver=2025-11-06-phPasscodeBug_121&langx=zh-cn&p=get_game_more&gtype=ft&showtype=live&ltype=3&isRB=Y&lid=109191&specialClick=&mode=NORMAL&from=game_more&filter=RmixOU&ts=1763735473983&ecid=10164223'
