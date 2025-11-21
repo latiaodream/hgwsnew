@@ -1736,17 +1736,41 @@ export class CrownScraper {
         return rawHdp;
       };
 
-      // 若按 gid 过滤为空，则回退全量
-      const filterByGid = (list: any[]) => {
+      // 优先按 gid 找到当前赛事的主记录，再按 gidm/eventid 归组：同一场不同盘口一并保留。
+      const filterGamesForMatch = (list: any[]) => {
         if (!targetGid) return list;
-        const filtered = list.filter((g) => {
+
+        // 先找 gid 匹配的“主” game
+        const primary = list.find((g) => {
           const gidVal = pickString(g, ['gid', 'GID', '@_gid']);
           return gidVal && String(gidVal) === String(targetGid);
         });
-        return filtered.length ? filtered : list;
+
+        if (!primary) {
+          // 找不到就退回老逻辑：只按 gid 过滤，不是空就用过滤结果
+          const filtered = list.filter((g) => {
+            const gidVal = pickString(g, ['gid', 'GID', '@_gid']);
+            return gidVal && String(gidVal) === String(targetGid);
+          });
+          return filtered.length ? filtered : list;
+        }
+
+        // 同一场的多盘口共享 gidm / eventid / hgid 等字段，按这些 key 归组
+        const groupKey = pickString(primary, ['gidm', 'GIDM', 'hgid', 'HGID', 'eventid', 'EVENTID']);
+        if (!groupKey) {
+          return [primary];
+        }
+
+        const grouped = list.filter((g) => {
+          if (g === primary) return true;
+          const k = pickString(g, ['gidm', 'GIDM', 'hgid', 'HGID', 'eventid', 'EVENTID']);
+          return k && k === groupKey;
+        });
+
+        return grouped.length ? grouped : [primary];
       };
 
-      const applyGid = filterByGid(games);
+      const applyGid = filterGamesForMatch(games);
 
       for (const game of applyGid) {
         if (!game) continue;
