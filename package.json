@@ -5,6 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "monitor": "ts-node src/monitor-server.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "stop": "[ -f crown-scraper.pid ] && kill $(cat crown-scraper.pid) || echo 'No PID file found'",

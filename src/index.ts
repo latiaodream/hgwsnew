@@ -2,19 +2,12 @@ import dotenv from 'dotenv';
 import express from 'express';
 import { ScraperManager } from './scrapers/ScraperManager';
 import { WSServer } from './websocket/WSServer';
-import { ThirdPartyManager } from './scrapers/ThirdPartyManager';
 import { AccountConfig, ShowType } from './types';
 import logger from './utils/logger';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as http from 'http';
-import mappingRouter from './routes/mapping';
-import leagueMappingRouter from './routes/league-mapping';
-import thirdpartyRouter, { setThirdPartyManager } from './routes/thirdparty';
 import matchesRouter, { setScraperManager } from './routes/matches';
-import matchPushRouter, { setManagers as setMatchPushManagers } from './routes/match-push';
-import matchCompareRouter, { setManagers as setMatchCompareManagers } from './routes/match-compare';
-import historyRouter from './routes/history';
 import { testConnection, initDatabase, closeDatabase } from './config/database';
 import { MatchHistoryService } from './services/MatchHistoryService';
 
@@ -31,7 +24,6 @@ dotenv.config();
  */
 class Application {
   private scraperManager: ScraperManager;
-  private thirdPartyManager?: ThirdPartyManager;
   private wsServer?: WSServer;
   private httpServer?: http.Server;
   private expressApp: express.Application;
@@ -57,28 +49,15 @@ class Application {
 
     // API 路由（已简化：仅保留核心抓取与推送功能）
     this.expressApp.use('/api/matches', matchesRouter);
-    this.expressApp.use('/api/match-push', matchPushRouter);
-    this.expressApp.use('/api/match-compare', matchCompareRouter);
 
     // 页面路由
+    // 现在仅保留 matches-v2 界面为主界面
     this.expressApp.get('/', (req, res) => {
-      res.redirect('/matches');
-    });
-
-    this.expressApp.get('/matches', (req, res) => {
-      res.sendFile(path.join(process.cwd(), 'public', 'matches.html'));
+      res.redirect('/matches-v2');
     });
 
     this.expressApp.get('/matches-v2', (req, res) => {
       res.sendFile(path.join(process.cwd(), 'public', 'matches-v2.html'));
-    });
-
-    this.expressApp.get('/team-mapping', (req, res) => {
-      res.sendFile(path.join(process.cwd(), 'public', 'team-mapping.html'));
-    });
-
-    this.expressApp.get('/thirdparty-odds', (req, res) => {
-      res.sendFile(path.join(process.cwd(), 'public', 'thirdparty-odds.html'));
     });
 
     // 404 处理
@@ -136,19 +115,18 @@ class Application {
     // 设置 ScraperManager 到路由
     setScraperManager(this.scraperManager);
 
-    // 启动第三方 API 抓取器
-    this.startThirdPartyManager();
+    // 第三方 iSports 已彻底废弃，不再启动 ThirdPartyManager
 
     // 启动 HTTP 服务器（用于展示页面和 API）
     const httpPort = parseInt(process.env.HTTP_PORT || '10089');
     this.startHttpServer(httpPort);
 
-    // 启动 WebSocket 服务器（可选）
+    // 启动 WebSocket 服务器
     const enableWS = process.env.ENABLE_WEBSOCKET !== '0';
     if (enableWS) {
       const wsPort = parseInt(process.env.WS_PORT || '8080');
       try {
-        this.wsServer = new WSServer(wsPort, this.scraperManager, this.thirdPartyManager);
+        this.wsServer = new WSServer(wsPort, this.scraperManager);
         logger.info(`📡 WebSocket 服务器: ws://localhost:${wsPort}`);
       } catch (error: any) {
         logger.warn(`⚠️ WebSocket 服务器启动失败 (端口 ${wsPort} 可能被占用): ${error.message}`);
@@ -162,44 +140,9 @@ class Application {
     logger.info('✅ 服务启动成功');
     logger.info(`🌐 HTTP 服务器: http://localhost:${httpPort}`);
     logger.info(`📄 页面:`);
-    logger.info(`   - 皇冠赛事: http://localhost:${httpPort}/matches`);
-    logger.info(`   - 第三方赔率: http://localhost:${httpPort}/thirdparty-odds`);
-    logger.info(`   - 名称映射: http://localhost:${httpPort}/team-mapping`);
+    logger.info(`   - 皇冠赛事中心: http://localhost:${httpPort}/matches-v2`);
     logger.info(`🔑 认证令牌: ${process.env.WS_AUTH_TOKEN || 'default-token'}`);
     logger.info('='.repeat(60));
-  }
-
-  /**
-   * 启动第三方 API 管理器
-   */
-  private startThirdPartyManager(): void {
-    const isportsApiKey = process.env.ISPORTS_API_KEY || 'GvpziueL9ouzIJNj';
-    const fetchInterval = parseInt(process.env.THIRDPARTY_FETCH_INTERVAL || '300'); // 默认 5 分钟
-
-    this.thirdPartyManager = new ThirdPartyManager(
-      isportsApiKey,
-      fetchInterval
-    );
-    this.thirdPartyManager.setUseDatabase(this.databaseReady);
-
-    // 设置到路由中
-    setThirdPartyManager(this.thirdPartyManager);
-    setMatchPushManagers(this.scraperManager, this.thirdPartyManager);
-    setMatchCompareManagers(this.scraperManager, this.thirdPartyManager);
-
-    // 先加载缓存，然后再启动定时抓取
-    this.thirdPartyManager.ensureCacheLoaded()
-      .then(() => {
-        // 启动定时抓取
-        this.thirdPartyManager!.start();
-      })
-      .catch(error => {
-        logger.warn(`[ThirdPartyManager] 预加载缓存失败: ${error.message}`);
-        // 即使加载失败也要启动定时抓取
-        this.thirdPartyManager!.start();
-      });
-
-    logger.info(`🌍 第三方 API 抓取器已启动 (间隔: ${fetchInterval}秒)`);
   }
 
   /**
@@ -389,11 +332,8 @@ class Application {
       logger.info('1️⃣ 停止抓取器并登出账号...');
       await this.scraperManager.stopAll();
 
-      // 2. 停止第三方 API 抓取器
-      logger.info('2️⃣ 停止第三方 API 抓取器...');
-      if (this.thirdPartyManager) {
-        this.thirdPartyManager.stop();
-      }
+      // 2. 第三方 API 抓取器已废弃，无需处理
+      logger.info('2️⃣ 第三方 API 抓取器已废弃，跳过');
 
       // 3. 关闭 WebSocket 服务器
       logger.info('3️⃣ 关闭 WebSocket 服务器...');

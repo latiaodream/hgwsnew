@@ -690,9 +690,11 @@ export class CrownScraper {
 
     // 先筛选出明确有更多盘口的赛事（MORE > 0）。若为 live 且没有标记 MORE>0，则降级为“全量尝试”，避免漏拉盘口。
     let candidates = matches.filter(match => this.hasMoreMarketsFlag(match));
+    logger.info(`[${this.account.showType}] enrichMatchesWithMoreMarkets: 总赛事=${matches.length}, MORE>0的赛事=${candidates.length}`);
+    logger.info(`[${this.account.showType}] MORE>0的GID列表: ${candidates.map(m => `${m.gid}(MORE=${(m as any).raw?.game?.MORE})`).join(', ')}`);
     if (candidates.length === 0 && this.account.showType === 'live') {
       candidates = matches;
-      logger.debug(`[${this.account.showType}] 没有 MORE>0 标记，直播场次全量尝试更多盘口`);
+      logger.info(`[${this.account.showType}] 没有 MORE>0 标记，直播场次全量尝试更多盘口 (${candidates.length}场)`);
     } else if (candidates.length === 0) {
       logger.debug(`[${this.account.showType}] 当前没有标记 MORE>0 的赛事，跳过更多盘口抓取`);
       return;
@@ -777,89 +779,78 @@ export class CrownScraper {
       merged.moneyline = { ...(merged.moneyline || {}), ...incoming.moneyline };
     }
 
-    // 合并盘口数组时顺便去重，避免主盘口和更多盘口返回完全相同的行导致前端重复显示。
-    // 对于同一个 hdp（盘口）同时出现在基础盘和更多盘口中时：
-    // - 任何来源的盘口都会参与一个统一的“评分”；
-    // - more/obt 来源整体优先于 base；
-    // - 在同一来源内部（例如多个 OBT/更多盘口候选），选评分更高的那条，而不是简单“后写覆盖前写”。
-    const getPriority = (item: any, sourceTag?: string): number => {
-      const meta = item && (item.__meta || item.meta || {});
-      let score = 0;
-      const upper = (v: any) => (typeof v === 'string' ? v.toUpperCase() : v);
-      if (upper(meta.isMaster) === 'Y') score += 8;
-      if (upper(meta.gopen) === 'Y') score += 4;
-      if (upper(meta.hnike) === 'Y') score += 2;
-      if (meta.model && /MIX/i.test(meta.model)) score -= 1; // MIX 盘口降权
-      if (sourceTag === 'obt') score += 1; // OBT 兜底来源略微加权
-      return score;
-    };
+    // 简化合并策略：
+    // - 主盘口（get_game_list）为基准；
+    // - 更多盘口 / OBT 只追加“主盘没有的盘口值 (hdp)”，不再覆盖主盘的同盘口；
+    // - 不再使用评分逻辑挑选“最佳盘口”，避免和官网选择规则不一致。
+    const mergeLineArray = <T>(target?: T[], addition?: T[]): T[] | undefined => {
+      const result: T[] = [];
+      const normalizeHdp = (v: any) => (typeof v === 'number' && Object.is(v, -0) ? 0 : v);
 
-    const mergeLineArray = <T>(target?: T[], addition?: T[], sourceTag?: string): T[] | undefined => {
-      if ((!target || !target.length) && (!addition || !addition.length)) {
-        return target;
+      if (Array.isArray(target)) {
+        for (const item of target) {
+          if (item == null) continue;
+          result.push(item);
+        }
       }
 
-      const map = new Map<string, { item: T; score: number; tag?: string }>();
-      const upsert = (item: T, tag?: string) => {
-        if (item == null) return;
-        const anyItem = item as any;
-        let hdpKey: string;
-        if (anyItem && anyItem.hdp !== undefined && anyItem.hdp !== null) {
-          // 把 -0 归一到 0，避免 -0 和 0 被当成两个不同盘口导致覆盖失败
-          const hdpVal = typeof anyItem.hdp === 'number' ? (Object.is(anyItem.hdp, -0) ? 0 : anyItem.hdp) : anyItem.hdp;
-          hdpKey = `hdp:${hdpVal}`;
-        } else {
-          hdpKey = JSON.stringify(item);
-        }
-        const score = getPriority(anyItem, tag);
-        const existing = map.get(hdpKey);
-        const incomingIsBase = tag === 'base';
-        if (!existing) {
-          map.set(hdpKey, { item, score, tag });
-          return;
-        }
+      if (Array.isArray(addition) && addition.length) {
+        for (const item of addition) {
+          if (item == null) continue;
+          const anyItem: any = item as any;
+          const hasHdp = anyItem && anyItem.hdp !== undefined && anyItem.hdp !== null;
 
-        // 已存在的是 base，新的来自 more/obt：永远允许覆盖（live 更多盘口/OBT 优先于基础盘）
-        if (existing.tag === 'base' && !incomingIsBase) {
-          map.set(hdpKey, { item, score, tag });
-          return;
+          if (hasHdp && result.length) {
+            const newHdp = normalizeHdp(anyItem.hdp);
+            const existsSameHdp = result.some((r: any) => {
+              if (r == null) return false;
+              const rhdp = (r as any).hdp;
+              if (rhdp === undefined || rhdp === null) return false;
+              return normalizeHdp(rhdp) === newHdp;
+            });
+            if (existsSameHdp) {
+              // 主盘已经有这个盘口值，保留主盘，忽略更多盘口/OBT 的同盘口行
+              continue;
+            }
+          }
+
+          result.push(item);
         }
+      }
 
-        // 两个都是更多来源（more/obt），或者两个都是 base：按评分高低决定是否覆盖
-        if (score >= existing.score) {
-          map.set(hdpKey, { item, score, tag });
-        }
-      };
-
-      if (target) target.forEach(i => upsert(i, 'base'));
-      if (addition) addition.forEach(i => upsert(i, sourceTag || 'addition'));
-
-      return Array.from(map.values()).map(v => v.item);
+      return result.length ? result : target;
     };
 
     if (incoming.full) {
       merged.full = merged.full || {};
-      merged.full.handicapLines = mergeLineArray(merged.full.handicapLines, incoming.full.handicapLines, (incoming as any).__source);
-      merged.full.overUnderLines = mergeLineArray(merged.full.overUnderLines, incoming.full.overUnderLines, (incoming as any).__source);
+      merged.full.handicapLines = mergeLineArray(merged.full.handicapLines, incoming.full.handicapLines);
+      merged.full.overUnderLines = mergeLineArray(merged.full.overUnderLines, incoming.full.overUnderLines);
     }
 
     if (incoming.half) {
       merged.half = merged.half || {};
-      merged.half.handicapLines = mergeLineArray(merged.half.handicapLines, incoming.half.handicapLines, (incoming as any).__source);
-      merged.half.overUnderLines = mergeLineArray(merged.half.overUnderLines, incoming.half.overUnderLines, (incoming as any).__source);
+      merged.half.handicapLines = mergeLineArray(merged.half.handicapLines, incoming.half.handicapLines);
+      merged.half.overUnderLines = mergeLineArray(merged.half.overUnderLines, incoming.half.overUnderLines);
     }
 
     return merged;
   }
 
   private async fetchMoreMarkets(match: Match): Promise<Markets | null> {
+    logger.info(`[${this.account.showType}] fetchMoreMarkets 开始: GID=${match.gid}`);
     if (this.shouldSkipBecauseSuspended('get_game_more')) {
+      logger.info(`[${this.account.showType}] fetchMoreMarkets 跳过: 因为 suspended`);
       return null;
     }
-    if (!match?.gid) return null;
+    if (!match?.gid) {
+      logger.info(`[${this.account.showType}] fetchMoreMarkets 跳过: 没有 GID`);
+      return null;
+    }
     if (!this.isLoggedIn) {
+      logger.info(`[${this.account.showType}] fetchMoreMarkets: 需要登录`);
       const loginSuccess = await this.login();
       if (!loginSuccess) {
+        logger.info(`[${this.account.showType}] fetchMoreMarkets 跳过: 登录失败`);
         return null;
       }
     }
