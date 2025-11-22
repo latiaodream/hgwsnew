@@ -103,7 +103,7 @@ export class CrownScraper {
 
     // live 默认强制开启更多盘口，today/early 仍然由环境变量控制
     const autoEnableForLive = this.account.showType === 'live';
-    this.enableMoreMarkets = autoEnableForLive || this.resolveMoreMarketsFlag();
+    this.enableMoreMarkets = this.resolveMoreMarketsFlag() || autoEnableForLive;
     this.moreMarketsStartDelayMs = this.resolveStartDelay();
     this.moreMarketsIntervalMs = this.resolveThrottleInterval();
     this.maxConcurrentMoreMarkets = this.resolveConcurrentLimit();

@@ -1,0 +1,148 @@
+{
+  "gid": "8294909",
+  "league": "英格兰超级联赛",
+  "home": "伯恩利",
+  "away": "切尔西",
+  "markets": {
+    "moneyline": {
+      "home": 6.2,
+      "draw": 4.4,
+      "away": 1.53
+    },
+    "full": {
+      "handicapLines": [
+        {
+          "hdp": 1,
+          "home": 1.01,
+          "away": 0.88
+        }
+      ],
+      "overUnderLines": [
+        {
+          "hdp": 2.75,
+          "over": 0.97,
+          "under": 0.91
+        }
+      ]
+    },
+    "half": {
+      "handicapLines": [
+        {
+          "hdp": 0.5,
+          "home": 0.8,
+          "away": 1.09
+        }
+      ],
+      "overUnderLines": [
+        {
+          "hdp": 1,
+          "over": 0.75,
+          "under": 1.13
+        }
+      ],
+      "moneyline": {
+        "home": 5.5,
+        "draw": 2.37,
+        "away": 2.09
+      }
+    },
+    "halfMoneyline": {
+      "home": 5.5,
+      "draw": 2.37,
+      "away": 2.09
+    }
+  },
+  "raw": {
+    "game": {
+      "id": "8294909",
+      "GID": "8294909",
+      "DATETIME": "11-22 08:30a",
+      "LID": "100021",
+      "LEAGUE": "英格兰超级联赛",
+      "GIDM": "7257951",
+      "GNUM_H": "600020",
+      "GNUM_C": "600019",
+      "TEAM_H_ID": "102200",
+      "TEAM_C_ID": "103223",
+      "TEAM_H": "伯恩利",
+      "TEAM_C": "切尔西",
+      "ISMASTER": "Y",
+      "STRONG": "C",
+      "RETIMESET": "",
+      "MORE": "104",
+      "HIDE_N": "N",
+      "PTYPE_MAP": "0",
+      "PTYPE": "",
+      "IMPORTANT": "N",
+      "HGID": "8294910",
+      "HSTRONG": "C",
+      "FLAG_CLASS": "flag_GB_ENG",
+      "ECID": "10097797",
+      "NOW_MODEL": "HT",
+      "SCORE_H": "",
+      "SCORE_C": "",
+      "LASTESTSCORE": "",
+      "REDCARD_H": "",
+      "REDCARD_C": "",
+      "TV_WEB_SW": "Y",
+      "TV_PH_SW": "Y",
+      "EVENTID": "8DBCBDBCB7CCBABCB9CCBDBCB6CCBDBCB388C6C8C8C6CFCFCECBA9B3",
+      "CENTER_TV": "glive",
+      "PFCOLOR_H": "A52A2A",
+      "PFCOLOR_C": "FFFFFF",
+      "MT": "br",
+      "MT_ID": "61300739",
+      "MT_GTYPE": "FT",
+      "MT_SPID": "1",
+      "MT_LINEUPS": "Y",
+      "FT_SCROE_H": "",
+      "FT_SCROE_C": "",
+      "ET_SCROE_H": "",
+      "ET_SCROE_C": "",
+      "FANTASY_DATA": "No Fantasy Data",
+      "ISFANTASY": "N",
+      "HNIKE": "",
+      "MIDFIELD": "N",
+      "RUNNING": "Y",
+      "GOPEN": "Y",
+      "HGOPEN": "Y",
+      "TIMEEDITPOINT": "",
+      "RATIO_R": "1",
+      "IOR_RH": "1.010",
+      "IOR_RC": "0.880",
+      "RATIO_OUO": "2.5 / 3",
+      "RATIO_OUU": "2.5 / 3",
+      "IOR_OUH": "0.910",
+      "IOR_OUC": "0.970",
+      "IOR_MH": "6.20",
+      "IOR_MC": "1.53",
+      "IOR_MN": "4.40",
+      "IOR_EOO": "1.95",
+      "IOR_EOE": "1.93",
+      "RATIO_HR": "0.5",
+      "IOR_HRH": "0.800",
+      "IOR_HRC": "1.090",
+      "RATIO_HOUO": "1",
+      "RATIO_HOUU": "1",
+      "IOR_HOUH": "1.130",
+      "IOR_HOUC": "0.750",
+      "IOR_HMH": "5.50",
+      "IOR_HMC": "2.09",
+      "IOR_HMN": "2.37",
+      "IOR_TSY": "1.9",
+      "IOR_TSN": "1.91",
+      "TQ_COUNT": "0",
+      "PD_COUNT": "1",
+      "R_COUNT": "4",
+      "OU_COUNT": "4",
+      "CN_COUNT": "1",
+      "RN_COUNT": "1",
+      "WI_COUNT": "0",
+      "ET_COUNT": "0",
+      "PK_COUNT": "0",
+      "SFS_COUNT": "1",
+      "SYSTIME": "2025-11-22 05:30:55",
+      "IS_RB": "N"
+    }
+  }
+}
