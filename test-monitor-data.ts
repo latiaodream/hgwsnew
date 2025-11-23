@@ -20,7 +20,7 @@ async function testMonitorData() {
     const matches = await scraper.fetchMatchesByType('today');
     console.log(`✅ 抓取到 ${matches.length} 场赛事\n`);
 
-    const targetGid = '8294909';
+    const targetGid = '8297079';
     const match = matches.find(m => m.gid === targetGid);
 
     if (!match) {

@@ -6,7 +6,7 @@ async function testLogin() {
   const baseUrl = 'https://hga027.com';
   const username = 'WjeLaA68i0';
   const password = 'I0FQsaTFFUHg';
-  const version = '2025-10-16-fix342_120'; // 使用默认版本号
+  const version = '2025-11-06-phPasscodeBug_121'; // 使用新版本号
   
   const userAgent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1';
   const encodedUA = Buffer.from(userAgent).toString('base64');

@@ -1,4 +1,6 @@
 import axios, { AxiosInstance } from 'axios';
+import { chgIorHK } from '../utils/crownOdds';
+
 import * as https from 'https';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { SocksProxyAgent } from 'socks-proxy-agent';
@@ -1419,6 +1421,8 @@ export class CrownScraper {
 
     const markets: Markets = {};
 
+    // NOTE: full-time handicap odds use HK conversion (chgIorHK) to match official UI.
+
     const strong = pick(['strong', 'STRONG']);
     const halfStrong = pick(['hstrong', 'HSTRONG']);
 
@@ -1449,11 +1453,14 @@ export class CrownScraper {
     if (ratioR || ratioRH || ratioRC) {
       let hdp = this.parseHandicap(ratioR);
       hdp = this.normalizeHdpWithStrong(hdp, ratioR, strong as string | undefined);
-      if (hdp !== null && markets.full?.handicapLines) {
+      const homeRaw = this.parseOddsValue(ratioRH);
+      const awayRaw = this.parseOddsValue(ratioRC);
+      if (hdp !== null && markets.full?.handicapLines && homeRaw !== undefined && awayRaw !== undefined) {
+        const [home, away] = chgIorHK(homeRaw, awayRaw);
         markets.full.handicapLines.push({
           hdp,
-          home: this.parseOddsValue(ratioRH) || 0,
-          away: this.parseOddsValue(ratioRC) || 0,
+          home,
+          away,
         });
       }
     }
@@ -1468,11 +1475,14 @@ export class CrownScraper {
       if (ratio || home || away) {
         let hdp = this.parseHandicap(ratio);
         hdp = this.normalizeHdpWithStrong(hdp, ratio, strong as string | undefined);
-        if (hdp !== null && markets.full?.handicapLines) {
+        const homeRaw = this.parseOddsValue(home);
+        const awayRaw = this.parseOddsValue(away);
+        if (hdp !== null && markets.full?.handicapLines && homeRaw !== undefined && awayRaw !== undefined) {
+          const [homeVal, awayVal] = chgIorHK(homeRaw, awayRaw);
           markets.full.handicapLines.push({
             hdp,
-            home: this.parseOddsValue(home) || 0,
-            away: this.parseOddsValue(away) || 0,
+            home: homeVal,
+            away: awayVal,
           });
         }
       }
@@ -1485,11 +1495,14 @@ export class CrownScraper {
 
     if (ratioO || ratioOUH || ratioOUC) {
       const hdp = this.parseHandicap(ratioO);
-      if (hdp !== null && markets.full?.overUnderLines) {
+      const underRaw = this.parseOddsValue(ratioOUH);
+      const overRaw = this.parseOddsValue(ratioOUC);
+      if (hdp !== null && markets.full?.overUnderLines && underRaw !== undefined && overRaw !== undefined) {
+        const [over, under] = chgIorHK(overRaw, underRaw);
         markets.full.overUnderLines.push({
           hdp,
-          over: this.parseOddsValue(ratioOUC) || 0,  // 注意：大球是 C
-          under: this.parseOddsValue(ratioOUH) || 0,  // 小球是 H
+          over,
+          under,
         });
       }
     }
@@ -1503,11 +1516,14 @@ export class CrownScraper {
 
       if (ratio || under || over) {
         const hdp = this.parseHandicap(ratio);
-        if (hdp !== null && markets.full?.overUnderLines) {
+        const underRaw = this.parseOddsValue(under);
+        const overRaw = this.parseOddsValue(over);
+        if (hdp !== null && markets.full?.overUnderLines && underRaw !== undefined && overRaw !== undefined) {
+          const [overVal, underVal] = chgIorHK(overRaw, underRaw);
           markets.full.overUnderLines.push({
             hdp,
-            over: this.parseOddsValue(over) || 0,
-            under: this.parseOddsValue(under) || 0,
+            over: overVal,
+            under: underVal,
           });
         }
       }
@@ -1527,11 +1543,14 @@ export class CrownScraper {
     if (ratioHR || ratioHRH || ratioHRC) {
       let hdp = this.parseHandicap(ratioHR);
       hdp = this.normalizeHdpWithStrong(hdp, ratioHR, halfStrong as string | undefined);
-      if (hdp !== null && markets.half?.handicapLines) {
+      const homeRaw = this.parseOddsValue(ratioHRH);
+      const awayRaw = this.parseOddsValue(ratioHRC);
+      if (hdp !== null && markets.half?.handicapLines && homeRaw !== undefined && awayRaw !== undefined) {
+        const [home, away] = chgIorHK(homeRaw, awayRaw);
         markets.half.handicapLines.push({
           hdp,
-          home: this.parseOddsValue(ratioHRH) || 0,
-          away: this.parseOddsValue(ratioHRC) || 0,
+          home,
+          away,
         });
       }
     }
@@ -1543,11 +1562,14 @@ export class CrownScraper {
 
     if (ratioHO || ratioHOUH || ratioHOUC) {
       const hdp = this.parseHandicap(ratioHO);
-      if (hdp !== null && markets.half?.overUnderLines) {
+      const underRaw = this.parseOddsValue(ratioHOUH);
+      const overRaw = this.parseOddsValue(ratioHOUC);
+      if (hdp !== null && markets.half?.overUnderLines && underRaw !== undefined && overRaw !== undefined) {
+        const [over, under] = chgIorHK(overRaw, underRaw);
         markets.half.overUnderLines.push({
           hdp,
-          over: this.parseOddsValue(ratioHOUC) || 0,
-          under: this.parseOddsValue(ratioHOUH) || 0,
+          over,
+          under,
         });
       }
     }
@@ -1798,12 +1820,17 @@ export class CrownScraper {
           hdp = normalizeHdpWithStrong(hdp, ratioR, strong);
           if (hdp !== null) {
             markets.full!.handicapLines = markets.full!.handicapLines || [];
-            markets.full!.handicapLines!.push({
-              hdp,
-              home: this.parseOddsValue(iorRH) || 0,
-              away: this.parseOddsValue(iorRC) || 0,
-              __meta: meta,
-            } as any);
+            const homeRaw = this.parseOddsValue(iorRH);
+            const awayRaw = this.parseOddsValue(iorRC);
+            if (homeRaw !== undefined && awayRaw !== undefined) {
+              const [home, away] = chgIorHK(homeRaw, awayRaw);
+              markets.full!.handicapLines!.push({
+                hdp,
+                home,
+                away,
+                __meta: meta,
+              } as any);
+            }
           }
         }
 
@@ -1840,12 +1867,15 @@ export class CrownScraper {
               continue;
             }
             markets.full!.handicapLines = markets.full!.handicapLines || [];
-            markets.full!.handicapLines!.push({
-              hdp: hdpAlt,
-              home: homeVal || 0,
-              away: awayVal || 0,
-              __meta: meta,
-            } as any);
+            if (homeVal !== undefined && awayVal !== undefined) {
+              const [home, away] = chgIorHK(homeVal, awayVal);
+              markets.full!.handicapLines!.push({
+                hdp: hdpAlt,
+                home,
+                away,
+                __meta: meta,
+              } as any);
+            }
           }
         }
 
@@ -1868,13 +1898,18 @@ export class CrownScraper {
         ) {
           const hdp = this.parseHandicap(ratioO);
           if (hdp !== null) {
-            markets.full!.overUnderLines = markets.full!.overUnderLines || [];
-            markets.full!.overUnderLines!.push({
-              hdp,
-              over: this.parseOddsValue(iorOUC) || 0,
-              under: this.parseOddsValue(iorOUH) || 0,
-              __meta: meta,
-            } as any);
+            const underVal = this.parseOddsValue(iorOUH);
+            const overVal = this.parseOddsValue(iorOUC);
+            if (underVal !== undefined && overVal !== undefined) {
+              const [over, under] = chgIorHK(overVal, underVal);
+              markets.full!.overUnderLines = markets.full!.overUnderLines || [];
+              markets.full!.overUnderLines!.push({
+                hdp,
+                over,
+                under,
+                __meta: meta,
+              } as any);
+            }
           }
         }
 
@@ -1911,13 +1946,16 @@ export class CrownScraper {
             if (underVal === undefined && overVal === undefined) {
               continue;
             }
-            markets.full!.overUnderLines = markets.full!.overUnderLines || [];
-            markets.full!.overUnderLines!.push({
-              hdp: hdpAltO,
-              over: overVal || 0,
-              under: underVal || 0,
-              __meta: meta,
-            } as any);
+            if (underVal !== undefined && overVal !== undefined) {
+              const [over, under] = chgIorHK(overVal, underVal);
+              markets.full!.overUnderLines = markets.full!.overUnderLines || [];
+              markets.full!.overUnderLines!.push({
+                hdp: hdpAltO,
+                over,
+                under,
+                __meta: meta,
+              } as any);
+            }
           }
         }
 
@@ -1934,12 +1972,13 @@ export class CrownScraper {
 	            if (hdpPlainO !== null) {
 	              const underVal = this.parseOddsValue(iorPlainOUH);
 	              const overVal = this.parseOddsValue(iorPlainOUC);
-	              if (underVal !== undefined || overVal !== undefined) {
+	              if (underVal !== undefined && overVal !== undefined) {
+	                const [over, under] = chgIorHK(overVal, underVal);
 	                markets.full!.overUnderLines = markets.full!.overUnderLines || [];
 	                markets.full!.overUnderLines!.push({
 	                  hdp: hdpPlainO,
-	                  over: overVal || 0,
-	                  under: underVal || 0,
+	                  over,
+	                  under,
 	                  __meta: meta,
 	                } as any);
 	              }
@@ -1964,12 +2003,17 @@ export class CrownScraper {
           hdp = normalizeHdpWithStrong(hdp, ratioHR, halfStrong);
           if (hdp !== null) {
             markets.half!.handicapLines = markets.half!.handicapLines || [];
-            markets.half!.handicapLines!.push({
-              hdp,
-              home: this.parseOddsValue(iorHRH) || 0,
-              away: this.parseOddsValue(iorHRC) || 0,
-              __meta: meta,
-            } as any);
+            const homeRaw = this.parseOddsValue(iorHRH);
+            const awayRaw = this.parseOddsValue(iorHRC);
+            if (homeRaw !== undefined && awayRaw !== undefined) {
+              const [home, away] = chgIorHK(homeRaw, awayRaw);
+              markets.half!.handicapLines!.push({
+                hdp,
+                home,
+                away,
+                __meta: meta,
+              } as any);
+            }
           }
         }
 
@@ -1996,13 +2040,18 @@ export class CrownScraper {
         ) {
           const hdp = this.parseHandicap(ratioHO);
           if (hdp !== null) {
-            markets.half!.overUnderLines = markets.half!.overUnderLines || [];
-            markets.half!.overUnderLines!.push({
-              hdp,
-              over: this.parseOddsValue(iorHOUC) || 0,
-              under: this.parseOddsValue(iorHOUH) || 0,
-              __meta: meta,
-            } as any);
+            const underVal = this.parseOddsValue(iorHOUH);
+            const overVal = this.parseOddsValue(iorHOUC);
+            if (underVal !== undefined && overVal !== undefined) {
+              const [over, under] = chgIorHK(overVal, underVal);
+              markets.half!.overUnderLines = markets.half!.overUnderLines || [];
+              markets.half!.overUnderLines!.push({
+                hdp,
+                over,
+                under,
+                __meta: meta,
+              } as any);
+            }
           }
         }
       }
