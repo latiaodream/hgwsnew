@@ -1921,6 +1921,33 @@ export class CrownScraper {
           }
         }
 
+	        // 兼容一类只通过 sw_OU / ratio_o / ratio_u 暴露的全场大小球盘口
+	        // 这类数据在 today 模式下很常见（例如 gid=8294909 的 2.5 / 3 / 2.25 等），
+	        // 如果不解析，会导致页面上只剩一个 2.75 主盘口。
+	        const swOUPlain = pickString(game, ['sw_OU']);
+	        if (!swOUPlain || swOUPlain.toUpperCase() === 'Y') {
+	          const ratioPlainO = pickString(game, ['ratio_o', 'ratio_u']);
+	          const iorPlainOUH = pickString(game, ['ior_OUH']);
+	          const iorPlainOUC = pickString(game, ['ior_OUC']);
+	          if (ratioPlainO && (iorPlainOUH || iorPlainOUC)) {
+	            const hdpPlainO = this.parseHandicap(ratioPlainO);
+	            if (hdpPlainO !== null) {
+	              const underVal = this.parseOddsValue(iorPlainOUH);
+	              const overVal = this.parseOddsValue(iorPlainOUC);
+	              if (underVal !== undefined || overVal !== undefined) {
+	                markets.full!.overUnderLines = markets.full!.overUnderLines || [];
+	                markets.full!.overUnderLines!.push({
+	                  hdp: hdpPlainO,
+	                  over: overVal || 0,
+	                  under: underVal || 0,
+	                  __meta: meta,
+	                } as any);
+	              }
+	            }
+	          }
+	        }
+
+
         // 半场让球盘口
         const ratioHR = pickString(game, ['RATIO_HRE', 'ratio_hre', 'HRE', 'HR', 'hratio']);
         const iorHRH = pickString(game, ['ior_HREH', 'ior_HRH']);
