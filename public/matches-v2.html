@@ -262,7 +262,8 @@
         }
         function renderHandicapFull(markets) {
             const mainLines = Array.isArray(markets?.full?.handicapLines) ? markets.full.handicapLines.filter(Boolean) : [];
-            const cornerLines = Array.isArray(markets?.cornerFull?.handicapLines) ? markets.cornerFull.handicapLines.filter(Boolean) : [];
+            const allCornerLines = Array.isArray(markets?.cornerFull?.handicapLines) ? markets.cornerFull.handicapLines.filter(Boolean) : [];
+            const cornerLines = allCornerLines.length ? [allCornerLines[0]] : [];
             if (!mainLines.length && !cornerLines.length) return '<div class="market"><div class="market-title">让球(1/2)</div><div class="empty-cell">-</div></div>';
             const rows = [
                 ...mainLines.map(line => `<div class="market-row">
@@ -308,7 +309,8 @@
         }
         function renderHandicapHalf(markets) {
             const mainLines = Array.isArray(markets?.half?.handicapLines) ? markets.half.handicapLines.filter(Boolean) : [];
-            const cornerLines = Array.isArray(markets?.cornerHalf?.handicapLines) ? markets.cornerHalf.handicapLines.filter(Boolean) : [];
+            const allCornerLines = Array.isArray(markets?.cornerHalf?.handicapLines) ? markets.cornerHalf.handicapLines.filter(Boolean) : [];
+            const cornerLines = allCornerLines.length ? [allCornerLines[0]] : [];
             if (!mainLines.length && !cornerLines.length) return '<div class="market"><div class="market-title">让球(半场)</div><div class="empty-cell">-</div></div>';
             const rows = [
                 ...mainLines.map(line => `<div class="market-row">
