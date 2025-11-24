@@ -1747,7 +1747,7 @@ export class CrownScraper {
         return false;
       };
 
-      const isCornerMarket = (game: any): boolean => {
+      const isCnCornerMarket = (game: any): boolean => {
         const mode = pickString(game, ['@_mode', 'mode']);
         if (mode && mode.toUpperCase() === 'CN') {
           return true;
@@ -1762,6 +1762,14 @@ export class CrownScraper {
         const teamC = pickString(game, ['TEAM_C', 'team_c', 'TEAM_C_CN', 'team_c_cn']);
         const combined = `${teamH || ''}${teamC || ''}`;
         if (/角球/.test(combined)) {
+          return true;
+        }
+
+        return false;
+      };
+
+      const isCornerMarket = (game: any): boolean => {
+        if (isCnCornerMarket(game)) {
           return true;
         }
 
@@ -1864,7 +1872,7 @@ export class CrownScraper {
         const halfStrong = pickString(game, ['HSTRONG', 'hstrong']);
 
         const meta = {
-          isMaster: pickString(game, ['ISMASTER', 'ismaster']),
+          isMaster: pickString(game, ['ISMASTER', 'ismaster', 'MASTER', 'master']),
           gopen: pickString(game, ['GOPEN', 'gopen']),
           hnike: pickString(game, ['HNIKE', 'hnike']),
           model: pickString(game, ['model', 'MODEL', '@_model']),
@@ -1925,49 +1933,51 @@ export class CrownScraper {
             }
           }
 
-          // 大小球 - 全场/半场：OU_CN / HOU_CN
-          const ratioO = pickString(game, [
-            'RATIO_ROUO',
-            'RATIO_ROUU',
-            'ratio_rouo',
-            'ratio_rouu',
-            'ratio_ouo',
-            'ratio_ouu',
-            'ratio_o',
-            'ratio_hrouo',
-            'ratio_hrouu',
-            'ratio_houo',
-            'ratio_houu',
-          ]);
-          const iorOUH = pickString(game, ['ior_ROUH', 'ior_OUH', 'ior_HROUH', 'ior_HOUH']);
-          const iorOUC = pickString(game, ['ior_ROUC', 'ior_OUC', 'ior_HROUC', 'ior_HOUC']);
-          const swOU = pickString(game, ['sw_ROU', 'sw_OU', 'sw_HROU', 'sw_HOU']);
+          // 大小球 - 全场/半场：OU_CN / HOU_CN，仅对 CN/角球队伍生效
+          if (isCnCornerMarket(game)) {
+            const ratioO = pickString(game, [
+              'RATIO_ROUO',
+              'RATIO_ROUU',
+              'ratio_rouo',
+              'ratio_rouu',
+              'ratio_ouo',
+              'ratio_ouu',
+              'ratio_o',
+              'ratio_hrouo',
+              'ratio_hrouu',
+              'ratio_houo',
+              'ratio_houu',
+            ]);
+            const iorOUH = pickString(game, ['ior_ROUH', 'ior_OUH', 'ior_HROUH', 'ior_HOUH']);
+            const iorOUC = pickString(game, ['ior_ROUC', 'ior_OUC', 'ior_HROUC', 'ior_HOUC']);
+            const swOU = pickString(game, ['sw_ROU', 'sw_OU', 'sw_HROU', 'sw_HOU']);
 
-          const pushCornerOU = (hdp: number, overRaw?: number, underRaw?: number) => {
-            if (overRaw === undefined || underRaw === undefined) return;
-            const [over, under] = chgIorHK(overRaw, underRaw);
-            if (isHalf) {
-              markets.cornerHalf = markets.cornerHalf || { handicapLines: [], overUnderLines: [] };
-              markets.cornerHalf.overUnderLines = markets.cornerHalf.overUnderLines || [];
-              (markets.cornerHalf.overUnderLines as any).push({ hdp, over, under, __meta: meta });
-            } else {
-              markets.cornerFull = markets.cornerFull || { handicapLines: [], overUnderLines: [] };
-              markets.cornerFull.overUnderLines = markets.cornerFull.overUnderLines || [];
-              (markets.cornerFull.overUnderLines as any).push({ hdp, over, under, __meta: meta });
-            }
-          };
+            const pushCornerOU = (hdp: number, overRaw?: number, underRaw?: number) => {
+              if (overRaw === undefined || underRaw === undefined) return;
+              const [over, under] = chgIorHK(overRaw, underRaw);
+              if (isHalf) {
+                markets.cornerHalf = markets.cornerHalf || { handicapLines: [], overUnderLines: [] };
+                markets.cornerHalf.overUnderLines = markets.cornerHalf.overUnderLines || [];
+                (markets.cornerHalf.overUnderLines as any).push({ hdp, over, under, __meta: meta });
+              } else {
+                markets.cornerFull = markets.cornerFull || { handicapLines: [], overUnderLines: [] };
+                markets.cornerFull.overUnderLines = markets.cornerFull.overUnderLines || [];
+                (markets.cornerFull.overUnderLines as any).push({ hdp, over, under, __meta: meta });
+              }
+            };
 
-          if (
-            ratioO &&
-            (iorOUH || iorOUC) &&
-            (!swOU || swOU.toUpperCase() === 'Y')
-          ) {
-            const hdp = this.parseHandicap(ratioO);
-            if (hdp !== null) {
-              const underVal = this.parseOddsValue(iorOUH);
-              const overVal = this.parseOddsValue(iorOUC);
-              if (underVal !== undefined && overVal !== undefined) {
-                pushCornerOU(hdp, overVal, underVal);
+            if (
+              ratioO &&
+              (iorOUH || iorOUC) &&
+              (!swOU || swOU.toUpperCase() === 'Y')
+            ) {
+              const hdp = this.parseHandicap(ratioO);
+              if (hdp !== null) {
+                const underVal = this.parseOddsValue(iorOUH);
+                const overVal = this.parseOddsValue(iorOUC);
+                if (underVal !== undefined && overVal !== undefined) {
+                  pushCornerOU(hdp, overVal, underVal);
+                }
               }
             }
           }
@@ -2287,6 +2297,40 @@ export class CrownScraper {
             }
           }
         }
+      }
+
+      const sortCornerLines = (lines?: any[]): any[] | undefined => {
+        if (!Array.isArray(lines)) return lines;
+        const normalizeBool = (v: any) =>
+          typeof v === 'string' ? v.toUpperCase() === 'Y' : !!v;
+        return [...lines].sort((a: any, b: any) => {
+          const ma = a?.__meta || {};
+          const mb = b?.__meta || {};
+          const aMaster = normalizeBool(ma.isMaster);
+          const bMaster = normalizeBool(mb.isMaster);
+          if (aMaster !== bMaster) return aMaster ? -1 : 1;
+          const aGopen = normalizeBool(ma.gopen);
+          const bGopen = normalizeBool(mb.gopen);
+          if (aGopen !== bGopen) return aGopen ? -1 : 1;
+          return 0;
+        });
+      };
+
+      if (markets.cornerFull) {
+        (markets.cornerFull as any).handicapLines = sortCornerLines(
+          (markets.cornerFull as any).handicapLines,
+        );
+        (markets.cornerFull as any).overUnderLines = sortCornerLines(
+          (markets.cornerFull as any).overUnderLines,
+        );
+      }
+      if (markets.cornerHalf) {
+        (markets.cornerHalf as any).handicapLines = sortCornerLines(
+          (markets.cornerHalf as any).handicapLines,
+        );
+        (markets.cornerHalf as any).overUnderLines = sortCornerLines(
+          (markets.cornerHalf as any).overUnderLines,
+        );
       }
 
       return markets;
