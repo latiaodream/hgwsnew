@@ -243,11 +243,11 @@
                 </div>
                 <div class="markets">
                     ${renderMoneyline(match.markets)}
-                    ${renderHandicap(match.markets?.full, '让球(1/2)')}
-                    ${renderOverUnder(match.markets?.full, '大小(O/U)')}
+                    ${renderHandicapFull(match.markets)}
+                    ${renderOverUnderFull(match.markets)}
                     ${renderMoneylineHalf(match.markets)}
-                    ${renderHandicap(match.markets?.half, '让球(半场)')}
-                    ${renderOverUnder(match.markets?.half, '大小(O/U半)')}
+                    ${renderHandicapHalf(match.markets)}
+                    ${renderOverUnderHalf(match.markets)}
                 </div>
             </div>`;
         }
@@ -260,25 +260,41 @@
                 <div class="odds-btn ${isEmptyValue(m.away) ? 'disabled' : ''}">${formatOdd(m.away)}</div>
             </div></div>`;
         }
-        function renderHandicap(market, title) {
-            const lines = Array.isArray(market?.handicapLines) ? market.handicapLines.filter(Boolean) : [];
-            if (!lines.length) return `<div class="market"><div class="market-title">${title}</div><div class="empty-cell">-</div></div>`;
-            const rows = lines.map(line => `<div class="market-row">
-                <div class="hdp-label">${formatLine(line.hdp, true)}</div>
-                <div class="odds-btn ${isEmptyValue(line.home) ? 'disabled' : ''}">${formatOdd(line.home)}</div>
-                <div class="odds-btn ${isEmptyValue(line.away) ? 'disabled' : ''}">${formatOdd(line.away)}</div>
-            </div>`).join('');
-            return `<div class="market"><div class="market-title">${title}</div><div class="market-handicap">${rows}</div></div>`;
+        function renderHandicapFull(markets) {
+            const mainLines = Array.isArray(markets?.full?.handicapLines) ? markets.full.handicapLines.filter(Boolean) : [];
+            const cornerLines = Array.isArray(markets?.cornerFull?.handicapLines) ? markets.cornerFull.handicapLines.filter(Boolean) : [];
+            if (!mainLines.length && !cornerLines.length) return '<div class="market"><div class="market-title">让球(1/2)</div><div class="empty-cell">-</div></div>';
+            const rows = [
+                ...mainLines.map(line => `<div class="market-row">
+                    <div class="hdp-label">${formatLine(line.hdp, true)}</div>
+                    <div class="odds-btn ${isEmptyValue(line.home) ? 'disabled' : ''}">${formatOdd(line.home)}</div>
+                    <div class="odds-btn ${isEmptyValue(line.away) ? 'disabled' : ''}">${formatOdd(line.away)}</div>
+                </div>`),
+                ...cornerLines.map(line => `<div class="market-row">
+                    <div class="hdp-label">角球 ${formatLine(line.hdp, true)}</div>
+                    <div class="odds-btn ${isEmptyValue(line.home) ? 'disabled' : ''}">${formatOdd(line.home)}</div>
+                    <div class="odds-btn ${isEmptyValue(line.away) ? 'disabled' : ''}">${formatOdd(line.away)}</div>
+                </div>`)
+            ].join('');
+            return `<div class="market"><div class="market-title">让球(1/2)</div><div class="market-handicap">${rows}</div></div>`;
         }
-        function renderOverUnder(market, title) {
-            const lines = Array.isArray(market?.overUnderLines) ? market.overUnderLines.filter(Boolean) : [];
-            if (!lines.length) return `<div class="market"><div class="market-title">${title}</div><div class="empty-cell">-</div></div>`;
-            const rows = lines.map(line => `<div class="market-row">
-                <div class="hdp-label">${formatLine(line.hdp)}</div>
-                <div class="odds-btn ${isEmptyValue(line.over) ? 'disabled' : ''}">${formatOdd(line.over)}</div>
-                <div class="odds-btn ${isEmptyValue(line.under) ? 'disabled' : ''}">${formatOdd(line.under)}</div>
-            </div>`).join('');
-            return `<div class="market"><div class="market-title">${title}</div><div class="market-overunder">${rows}</div></div>`;
+        function renderOverUnderFull(markets) {
+            const mainLines = Array.isArray(markets?.full?.overUnderLines) ? markets.full.overUnderLines.filter(Boolean) : [];
+            const cornerLines = Array.isArray(markets?.cornerFull?.overUnderLines) ? markets.cornerFull.overUnderLines.filter(Boolean) : [];
+            if (!mainLines.length && !cornerLines.length) return '<div class="market"><div class="market-title">大小(O/U)</div><div class="empty-cell">-</div></div>';
+            const rows = [
+                ...mainLines.map(line => `<div class="market-row">
+                    <div class="hdp-label">${formatLine(line.hdp)}</div>
+                    <div class="odds-btn ${isEmptyValue(line.over) ? 'disabled' : ''}">${formatOdd(line.over)}</div>
+                    <div class="odds-btn ${isEmptyValue(line.under) ? 'disabled' : ''}">${formatOdd(line.under)}</div>
+                </div>`),
+                ...cornerLines.map(line => `<div class="market-row">
+                    <div class="hdp-label">角球 ${formatLine(line.hdp)}</div>
+                    <div class="odds-btn ${isEmptyValue(line.over) ? 'disabled' : ''}">${formatOdd(line.over)}</div>
+                    <div class="odds-btn ${isEmptyValue(line.under) ? 'disabled' : ''}">${formatOdd(line.under)}</div>
+                </div>`)
+            ].join('');
+            return `<div class="market"><div class="market-title">大小(O/U)</div><div class="market-overunder">${rows}</div></div>`;
         }
         function renderMoneylineHalf(markets) {
             if (!markets?.half?.moneyline) return '<div class="market"><div class="market-title">独赢(半场)</div><div class="empty-cell">-</div></div>';
@@ -288,6 +304,42 @@
                 <div class="odds-btn ${isEmptyValue(m.draw) ? 'disabled' : ''}">${formatOdd(m.draw)}</div>
                 <div class="odds-btn ${isEmptyValue(m.away) ? 'disabled' : ''}">${formatOdd(m.away)}</div>
             </div></div>`;
+        }
+        function renderHandicapHalf(markets) {
+            const mainLines = Array.isArray(markets?.half?.handicapLines) ? markets.half.handicapLines.filter(Boolean) : [];
+            const cornerLines = Array.isArray(markets?.cornerHalf?.handicapLines) ? markets.cornerHalf.handicapLines.filter(Boolean) : [];
+            if (!mainLines.length && !cornerLines.length) return '<div class="market"><div class="market-title">让球(半场)</div><div class="empty-cell">-</div></div>';
+            const rows = [
+                ...mainLines.map(line => `<div class="market-row">
+                    <div class="hdp-label">${formatLine(line.hdp, true)}</div>
+                    <div class="odds-btn ${isEmptyValue(line.home) ? 'disabled' : ''}">${formatOdd(line.home)}</div>
+                    <div class="odds-btn ${isEmptyValue(line.away) ? 'disabled' : ''}">${formatOdd(line.away)}</div>
+                </div>`),
+                ...cornerLines.map(line => `<div class="market-row">
+                    <div class="hdp-label">角球(半) ${formatLine(line.hdp, true)}</div>
+                    <div class="odds-btn ${isEmptyValue(line.home) ? 'disabled' : ''}">${formatOdd(line.home)}</div>
+                    <div class="odds-btn ${isEmptyValue(line.away) ? 'disabled' : ''}">${formatOdd(line.away)}</div>
+                </div>`)
+            ].join('');
+            return `<div class="market"><div class="market-title">让球(半场)</div><div class="market-handicap">${rows}</div></div>`;
+        }
+        function renderOverUnderHalf(markets) {
+            const mainLines = Array.isArray(markets?.half?.overUnderLines) ? markets.half.overUnderLines.filter(Boolean) : [];
+            const cornerLines = Array.isArray(markets?.cornerHalf?.overUnderLines) ? markets.cornerHalf.overUnderLines.filter(Boolean) : [];
+            if (!mainLines.length && !cornerLines.length) return '<div class="market"><div class="market-title">大小(O/U半)</div><div class="empty-cell">-</div></div>';
+            const rows = [
+                ...mainLines.map(line => `<div class="market-row">
+                    <div class="hdp-label">${formatLine(line.hdp)}</div>
+                    <div class="odds-btn ${isEmptyValue(line.over) ? 'disabled' : ''}">${formatOdd(line.over)}</div>
+                    <div class="odds-btn ${isEmptyValue(line.under) ? 'disabled' : ''}">${formatOdd(line.under)}</div>
+                </div>`),
+                ...cornerLines.map(line => `<div class="market-row">
+                    <div class="hdp-label">角球(半) ${formatLine(line.hdp)}</div>
+                    <div class="odds-btn ${isEmptyValue(line.over) ? 'disabled' : ''}">${formatOdd(line.over)}</div>
+                    <div class="odds-btn ${isEmptyValue(line.under) ? 'disabled' : ''}">${formatOdd(line.under)}</div>
+                </div>`)
+            ].join('');
+            return `<div class="market"><div class="market-title">大小(O/U半)</div><div class="market-overunder">${rows}</div></div>`;
         }
         init();
     </script>
