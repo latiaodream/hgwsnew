@@ -280,7 +280,8 @@
         }
         function renderOverUnderFull(markets) {
             const mainLines = Array.isArray(markets?.full?.overUnderLines) ? markets.full.overUnderLines.filter(Boolean) : [];
-            const cornerLines = Array.isArray(markets?.cornerFull?.overUnderLines) ? markets.cornerFull.overUnderLines.filter(Boolean) : [];
+            const allCornerLines = Array.isArray(markets?.cornerFull?.overUnderLines) ? markets.cornerFull.overUnderLines.filter(Boolean) : [];
+            const cornerLines = allCornerLines.length ? [allCornerLines[0]] : [];
             if (!mainLines.length && !cornerLines.length) return '<div class="market"><div class="market-title">大小(O/U)</div><div class="empty-cell">-</div></div>';
             const rows = [
                 ...mainLines.map(line => `<div class="market-row">
@@ -325,7 +326,8 @@
         }
         function renderOverUnderHalf(markets) {
             const mainLines = Array.isArray(markets?.half?.overUnderLines) ? markets.half.overUnderLines.filter(Boolean) : [];
-            const cornerLines = Array.isArray(markets?.cornerHalf?.overUnderLines) ? markets.cornerHalf.overUnderLines.filter(Boolean) : [];
+            const allCornerLines = Array.isArray(markets?.cornerHalf?.overUnderLines) ? markets.cornerHalf.overUnderLines.filter(Boolean) : [];
+            const cornerLines = allCornerLines.length ? [allCornerLines[0]] : [];
             if (!mainLines.length && !cornerLines.length) return '<div class="market"><div class="market-title">大小(O/U半)</div><div class="empty-cell">-</div></div>';
             const rows = [
                 ...mainLines.map(line => `<div class="market-row">
