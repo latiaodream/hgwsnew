@@ -1775,6 +1775,15 @@ export class CrownScraper {
           return true;
         }
 
+        // 特殊兼容：某些场次的角球盘口不会在 mode/ptype 上标记 CN/角球，
+        // 但会通过 OUC 字段 (sw_OUC + ior_OUCO/ior_OUCU) 承载，例如曼联 vs 埃弗顿那条 -2 0.95/0.87。
+        const swOUC = pickString(game, ['sw_OUC']);
+        const iorOUCO = pickString(game, ['ior_OUCO']);
+        const iorOUCU = pickString(game, ['ior_OUCU']);
+        if (swOUC && swOUC.toUpperCase() === 'Y' && (iorOUCO || iorOUCU)) {
+          return true;
+        }
+
         return false;
       };
 
@@ -1851,6 +1860,13 @@ export class CrownScraper {
 
         const strong = pickString(game, ['STRONG', 'strong']);
         const halfStrong = pickString(game, ['HSTRONG', 'hstrong']);
+
+        const meta = {
+          isMaster: pickString(game, ['ISMASTER', 'ismaster']),
+          gopen: pickString(game, ['GOPEN', 'gopen']),
+          hnike: pickString(game, ['HNIKE', 'hnike']),
+          model: pickString(game, ['model', 'MODEL', '@_model']),
+        };
 
         // 角球盘口：mode = CN 或 "-角球数" 的，单独解析到 cornerFull/cornerHalf
         if (isCornerMarket(game)) {
@@ -1946,13 +1962,6 @@ export class CrownScraper {
           // corner 市场处理完，继续下一个 game
           continue;
         }
-
-        const meta = {
-          isMaster: pickString(game, ['ISMASTER', 'ismaster']),
-          gopen: pickString(game, ['GOPEN', 'gopen']),
-          hnike: pickString(game, ['HNIKE', 'hnike']),
-          model: pickString(game, ['model', 'MODEL', '@_model']),
-        };
 
         // 全场让球盘口 - 主盘口
         const ratioR = pickString(game, ['RATIO_RE', 'ratio_re', 'RE', 'R', 'ratio']);
