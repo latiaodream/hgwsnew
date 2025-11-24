@@ -2605,7 +2605,12 @@ export class CrownScraper {
   }
 
   /**
-   * 解析滚球实时状态（如 "2H^82:14" 或 "HT"）
+   * 解析滚球实时状态（如 "2H^88:46" 或 "HT"）
+   *
+   * 说明：
+   * - 有些场次 RETIMESET 现在直接给的是 "2H^88:46" 这种格式，此时直接用它即可；
+   * - 老的格式是 NOW_MODEL = "2H"，RETIMESET = "88:46"，需要拼成 "2H^88:46"；
+   * - 避免出现 "FT^2H^88:46" 这种重复信息。
    */
   private parseLiveStatus(game: any): string | undefined {
     // 只有滚球才有实时状态
@@ -2613,22 +2618,50 @@ export class CrownScraper {
       return undefined;
     }
 
-    // NOW_MODEL 字段表示当前状态
-    // HT: 中场休息, 1H: 上半场, 2H: 下半场
-    const nowModel = game.NOW_MODEL || game.now_model;
-    if (nowModel) {
-      // 如果是中场休息，直接返回 HT
+    const rawNowModel = (game.NOW_MODEL || game.now_model || '').toString().trim();
+    const nowModel = rawNowModel.toUpperCase();
+    const rawTimer = (game.RETIMESET || game.retimeset || '').toString().trim();
+
+    // 优先处理 RETIMESET 已经是 "2H^88:46" 这种情况
+    if (rawTimer && rawTimer !== '0') {
+      if (rawTimer.includes('^')) {
+        const [periodRaw, timeRaw = ''] = rawTimer.split('^');
+        const period = (periodRaw || '').toUpperCase();
+        const time = timeRaw.trim();
+
+        // 中场休息统一返回 HT
+        if (period === 'HT') {
+          return 'HT';
+        }
+
+        if (period && time) {
+          return `${period}^${time}`;
+        }
+        // 只有节次，没有时间，则直接返回节次
+        if (period) {
+          return period;
+        }
+
+        // 回退：直接返回原始 RETIMESET
+        return rawTimer;
+      }
+
+      // 老格式：NOW_MODEL = "2H"，RETIMESET = "88:46"
       if (nowModel === 'HT') {
         return 'HT';
       }
-
-      // 如果有 RETIMESET 字段，表示比赛时间
-      const timer = game.RETIMESET || game.retimeset || '';
-      if (timer && timer !== '0') {
-        // 格式化为 "1H^45:00" 或 "2H^82:14"
-        return `${nowModel}^${timer}`;
+      if (nowModel) {
+        return `${nowModel}^${rawTimer}`;
       }
+      // 没有 NOW_MODEL，就直接返回时间本身
+      return rawTimer;
+    }
 
+    // 没有 RETIMESET，只根据 NOW_MODEL 判断
+    if (nowModel) {
+      if (nowModel === 'HT') {
+        return 'HT';
+      }
       return nowModel;
     }
 
