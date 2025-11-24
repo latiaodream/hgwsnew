@@ -1879,10 +1879,17 @@ export class CrownScraper {
           const isHalf = halfFlag;
 
           // 让球 - 全场/半场：R_CN / HR_CN，兼容 OUC 风格的角球让球（如曼联 vs 埃弗顿那条 0.95/0.87）
-          const ratioR = pickString(game, ['RATIO_RE', 'ratio_re', 'RE', 'R', 'ratio', 'hratio', 'ratio_hr', 'ratio_ouco', 'ratio_oucu']);
-          const iorRH = pickString(game, ['ior_REH', 'ior_RH', 'ior_HRH', 'ior_OUCO']);
-          const iorRC = pickString(game, ['ior_REC', 'ior_RC', 'ior_HRC', 'ior_OUCU']);
-          const swR = pickString(game, ['sw_RE', 'sw_R', 'sw_HR', 'sw_OUC']);
+          const ratioCornerOuc = pickString(game, ['ratio_ouco', 'ratio_oucu']);
+          const swOUC = pickString(game, ['sw_OUC']);
+          const isOucCorner = !!(
+            ratioCornerOuc &&
+            swOUC &&
+            swOUC.toUpperCase() === 'Y'
+          );
+          const ratioR = ratioCornerOuc || pickString(game, ['RATIO_RE', 'ratio_re', 'RE', 'R', 'ratio', 'hratio', 'ratio_hr']);
+          const iorRH = pickString(game, ['ior_OUCO', 'ior_REH', 'ior_RH', 'ior_HRH']);
+          const iorRC = pickString(game, ['ior_OUCU', 'ior_REC', 'ior_RC', 'ior_HRC']);
+          const swR = pickString(game, ['sw_OUC', 'sw_RE', 'sw_R', 'sw_HR']);
 
           const pushCornerHandicap = (hdp: number, homeRaw?: number, awayRaw?: number) => {
             if (homeRaw === undefined || awayRaw === undefined) return;
@@ -1907,6 +1914,9 @@ export class CrownScraper {
             // 对 OUC 这类原始 ratio 只有 "1" 的角球盘口，也用 STRONG/HSTRONG 翻转方向
             hdp = normalizeHdpWithStrong(hdp, ratioR, isHalf ? halfStrong : strong);
             if (hdp !== null) {
+              if (isOucCorner) {
+                hdp = hdp * 2;
+              }
               const homeRaw = this.parseOddsValue(iorRH);
               const awayRaw = this.parseOddsValue(iorRC);
               pushCornerHandicap(hdp, homeRaw, awayRaw);
