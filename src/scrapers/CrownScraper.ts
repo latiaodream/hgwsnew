@@ -1773,7 +1773,12 @@ export class CrownScraper {
           return true;
         }
 
-        // 特殊兼容：某些场次的角球盘口不会在 mode/ptype 上标记 CN/角球，
+        // 今日赛事只认 CN 角球，不使用 OUC 兼容逻辑，避免把普通大小球当成角球
+        if (this.account.showType === 'today') {
+          return false;
+        }
+
+        // 特殊兼容：某些非 CN 场次的角球盘口不会在 mode/ptype 上标记 CN/角球，
         // 但会通过 OUC 字段 (sw_OUC + ior_OUCO/ior_OUCU) 承载，例如曼联 vs 埃弗顿那条 -2 0.95/0.87。
         const swOUC = pickString(game, ['sw_OUC']);
         const iorOUCO = pickString(game, ['ior_OUCO']);
@@ -1876,6 +1881,7 @@ export class CrownScraper {
           gopen: pickString(game, ['GOPEN', 'gopen']),
           hnike: pickString(game, ['HNIKE', 'hnike']),
           model: pickString(game, ['model', 'MODEL', '@_model']),
+          mode: pickString(game, ['@_mode', 'mode']),
         };
 
         // 角球盘口：mode = CN 或 "-角球数" 的，单独解析到 cornerFull/cornerHalf
@@ -1886,25 +1892,17 @@ export class CrownScraper {
               (pickString(game, ['@_wtype', 'wtype']) || '') +
               (pickString(game, ['@_ptype', 'ptype']) || ''),
           );
-          const isHalf = halfFlag;
+          const isHalfByFlag = halfFlag;
 
-          // 让球 - 全场/半场：R_CN / HR_CN，兼容 OUC 风格的角球让球（如曼联 vs 埃弗顿那条 0.95/0.87）
-          const ratioCornerOuc = pickString(game, ['ratio_ouco', 'ratio_oucu']);
-          const swOUC = pickString(game, ['sw_OUC']);
-          const isOucCorner = !!(
-            ratioCornerOuc &&
-            swOUC &&
-            swOUC.toUpperCase() === 'Y'
-          );
-          const ratioR = ratioCornerOuc || pickString(game, ['RATIO_RE', 'ratio_re', 'RE', 'R', 'ratio', 'hratio', 'ratio_hr']);
-          const iorRH = pickString(game, ['ior_OUCO', 'ior_REH', 'ior_RH', 'ior_HRH']);
-          const iorRC = pickString(game, ['ior_OUCU', 'ior_REC', 'ior_RC', 'ior_HRC']);
-          const swR = pickString(game, ['sw_OUC', 'sw_RE', 'sw_R', 'sw_HR']);
-
-          const pushCornerHandicap = (hdp: number, homeRaw?: number, awayRaw?: number) => {
+          const pushCornerHandicap = (
+            isHalfLine: boolean,
+            hdp: number,
+            homeRaw?: number,
+            awayRaw?: number,
+          ) => {
             if (homeRaw === undefined || awayRaw === undefined) return;
             const [home, away] = chgIorHK(homeRaw, awayRaw);
-            if (isHalf) {
+            if (isHalfLine) {
               markets.cornerHalf = markets.cornerHalf || { handicapLines: [], overUnderLines: [] };
               markets.cornerHalf.handicapLines = markets.cornerHalf.handicapLines || [];
               (markets.cornerHalf.handicapLines as any).push({ hdp, home, away, __meta: meta });
@@ -1915,27 +1913,89 @@ export class CrownScraper {
             }
           };
 
-          if (
-            ratioR &&
-            (iorRH || iorRC) &&
-            (!swR || swR.toUpperCase() === 'Y')
-          ) {
-            let hdp = this.parseHandicap(ratioR);
-            // 对 OUC 这类原始 ratio 只有 "1" 的角球盘口，也用 STRONG/HSTRONG 翻转方向
-            hdp = normalizeHdpWithStrong(hdp, ratioR, isHalf ? halfStrong : strong);
+          const pushCornerOU = (
+            isHalfLine: boolean,
+            hdp: number,
+            overRaw?: number,
+            underRaw?: number,
+          ) => {
+            if (overRaw === undefined || underRaw === undefined) return;
+            const [over, under] = chgIorHK(overRaw, underRaw);
+            if (isHalfLine) {
+              markets.cornerHalf = markets.cornerHalf || { handicapLines: [], overUnderLines: [] };
+              markets.cornerHalf.overUnderLines = markets.cornerHalf.overUnderLines || [];
+              (markets.cornerHalf.overUnderLines as any).push({ hdp, over, under, __meta: meta });
+            } else {
+              markets.cornerFull = markets.cornerFull || { handicapLines: [], overUnderLines: [] };
+              markets.cornerFull.overUnderLines = markets.cornerFull.overUnderLines || [];
+              (markets.cornerFull.overUnderLines as any).push({ hdp, over, under, __meta: meta });
+            }
+          };
+
+          // 让球 - OUC 角球，让球盘口（主要用于滚球，非 CN）
+          const ratioCornerOuc = pickString(game, ['ratio_ouco', 'ratio_oucu']);
+          const swOUC = pickString(game, ['sw_OUC']);
+          const iorOUCO = pickString(game, ['ior_OUCO']);
+          const iorOUCU = pickString(game, ['ior_OUCU']);
+          const isOucCorner =
+            !!ratioCornerOuc &&
+            (!!iorOUCO || !!iorOUCU) &&
+            (!swOUC || swOUC.toUpperCase() === 'Y');
+
+          if (isOucCorner) {
+            let hdp = this.parseHandicap(ratioCornerOuc);
+            hdp = normalizeHdpWithStrong(hdp, ratioCornerOuc, isHalfByFlag ? halfStrong : strong);
             if (hdp !== null) {
-              if (isOucCorner) {
-                hdp = hdp * 2;
-              }
-              const homeRaw = this.parseOddsValue(iorRH);
-              const awayRaw = this.parseOddsValue(iorRC);
-              pushCornerHandicap(hdp, homeRaw, awayRaw);
+              // OUC 的角球让球盘口通常是 1 表示让 2 角球，需翻倍
+              hdp = hdp * 2;
+              const homeRaw = this.parseOddsValue(iorOUCO);
+              const awayRaw = this.parseOddsValue(iorOUCU);
+              pushCornerHandicap(isHalfByFlag, hdp, homeRaw, awayRaw);
             }
           }
 
-          // 大小球 - 全场/半场：OU_CN / HOU_CN，仅对 CN/角球队伍生效
+          // 让球 - CN 角球 R_CN / HR_CN
+          const ratioRFull = pickString(game, ['RATIO_RE', 'ratio_re', 'RE', 'R', 'ratio']);
+          const ratioRHalf = pickString(game, ['RATIO_HRE', 'ratio_hre', 'HRE', 'HR', 'hratio', 'ratio_hr']);
+          const iorRFH = pickString(game, ['ior_REH', 'ior_RH']);
+          const iorRFC = pickString(game, ['ior_REC', 'ior_RC']);
+          const iorRHH = pickString(game, ['ior_HRH']);
+          const iorRHC = pickString(game, ['ior_HRC']);
+          const swRFull = pickString(game, ['sw_R', 'sw_RE']);
+          const swRHalf = pickString(game, ['sw_HR']);
+
+          if (
+            ratioRFull &&
+            (iorRFH || iorRFC) &&
+            (!swRFull || swRFull.toUpperCase() === 'Y')
+          ) {
+            let hdp = this.parseHandicap(ratioRFull);
+            hdp = normalizeHdpWithStrong(hdp, ratioRFull, strong);
+            if (hdp !== null) {
+              const homeRaw = this.parseOddsValue(iorRFH);
+              const awayRaw = this.parseOddsValue(iorRFC);
+              pushCornerHandicap(false, hdp, homeRaw, awayRaw);
+            }
+          }
+
+          if (
+            ratioRHalf &&
+            (iorRHH || iorRHC) &&
+            (!swRHalf || swRHalf.toUpperCase() === 'Y')
+          ) {
+            let hdp = this.parseHandicap(ratioRHalf);
+            hdp = normalizeHdpWithStrong(hdp, ratioRHalf, halfStrong || strong);
+            if (hdp !== null) {
+              const homeRaw = this.parseOddsValue(iorRHH);
+              const awayRaw = this.parseOddsValue(iorRHC);
+              pushCornerHandicap(true, hdp, homeRaw, awayRaw);
+            }
+          }
+
+          // 大小球 - CN 角球 OU_CN / HOU_CN
           if (isCnCornerMarket(game)) {
-            const ratioO = pickString(game, [
+            // 全场角球大小
+            const ratioOFull = pickString(game, [
               'RATIO_ROUO',
               'RATIO_ROUU',
               'ratio_rouo',
@@ -1943,40 +2003,49 @@ export class CrownScraper {
               'ratio_ouo',
               'ratio_ouu',
               'ratio_o',
+            ]);
+            const iorOUHFull = pickString(game, ['ior_ROUH', 'ior_OUH']);
+            const iorOUCFull = pickString(game, ['ior_ROUC', 'ior_OUC']);
+            const swOUFull = pickString(game, ['sw_ROU', 'sw_OU']);
+
+            if (
+              ratioOFull &&
+              (iorOUHFull || iorOUCFull) &&
+              (!swOUFull || swOUFull.toUpperCase() === 'Y')
+            ) {
+              const hdp = this.parseHandicap(ratioOFull);
+              if (hdp !== null) {
+                const underVal = this.parseOddsValue(iorOUHFull);
+                const overVal = this.parseOddsValue(iorOUCFull);
+                if (underVal !== undefined && overVal !== undefined) {
+                  pushCornerOU(false, hdp, overVal, underVal);
+                }
+              }
+            }
+
+            // 半场角球大小（HOU_CN）
+            const ratioOHalf = pickString(game, [
               'ratio_hrouo',
               'ratio_hrouu',
               'ratio_houo',
               'ratio_houu',
+              'ratio_ho',
             ]);
-            const iorOUH = pickString(game, ['ior_ROUH', 'ior_OUH', 'ior_HROUH', 'ior_HOUH']);
-            const iorOUC = pickString(game, ['ior_ROUC', 'ior_OUC', 'ior_HROUC', 'ior_HOUC']);
-            const swOU = pickString(game, ['sw_ROU', 'sw_OU', 'sw_HROU', 'sw_HOU']);
-
-            const pushCornerOU = (hdp: number, overRaw?: number, underRaw?: number) => {
-              if (overRaw === undefined || underRaw === undefined) return;
-              const [over, under] = chgIorHK(overRaw, underRaw);
-              if (isHalf) {
-                markets.cornerHalf = markets.cornerHalf || { handicapLines: [], overUnderLines: [] };
-                markets.cornerHalf.overUnderLines = markets.cornerHalf.overUnderLines || [];
-                (markets.cornerHalf.overUnderLines as any).push({ hdp, over, under, __meta: meta });
-              } else {
-                markets.cornerFull = markets.cornerFull || { handicapLines: [], overUnderLines: [] };
-                markets.cornerFull.overUnderLines = markets.cornerFull.overUnderLines || [];
-                (markets.cornerFull.overUnderLines as any).push({ hdp, over, under, __meta: meta });
-              }
-            };
+            const iorOUHHalf = pickString(game, ['ior_HROUH', 'ior_HOUH']);
+            const iorOUCHalf = pickString(game, ['ior_HROUC', 'ior_HOUC']);
+            const swOUHalf = pickString(game, ['sw_HROU', 'sw_HOU']);
 
             if (
-              ratioO &&
-              (iorOUH || iorOUC) &&
-              (!swOU || swOU.toUpperCase() === 'Y')
+              ratioOHalf &&
+              (iorOUHHalf || iorOUCHalf) &&
+              (!swOUHalf || swOUHalf.toUpperCase() === 'Y')
             ) {
-              const hdp = this.parseHandicap(ratioO);
+              const hdp = this.parseHandicap(ratioOHalf);
               if (hdp !== null) {
-                const underVal = this.parseOddsValue(iorOUH);
-                const overVal = this.parseOddsValue(iorOUC);
+                const underVal = this.parseOddsValue(iorOUHHalf);
+                const overVal = this.parseOddsValue(iorOUCHalf);
                 if (underVal !== undefined && overVal !== undefined) {
-                  pushCornerOU(hdp, overVal, underVal);
+                  pushCornerOU(true, hdp, overVal, underVal);
                 }
               }
             }
@@ -2306,6 +2375,12 @@ export class CrownScraper {
         return [...lines].sort((a: any, b: any) => {
           const ma = a?.__meta || {};
           const mb = b?.__meta || {};
+          const aMode = typeof ma.mode === 'string' ? ma.mode.toUpperCase() : '';
+          const bMode = typeof mb.mode === 'string' ? mb.mode.toUpperCase() : '';
+          const aIsCn = aMode === 'CN';
+          const bIsCn = bMode === 'CN';
+          // CN 888888888 isMaster/gopen 88888
+          if (aIsCn !== bIsCn) return aIsCn ? -1 : 1;
           const aMaster = normalizeBool(ma.isMaster);
           const bMaster = normalizeBool(mb.isMaster);
           if (aMaster !== bMaster) return aMaster ? -1 : 1;
