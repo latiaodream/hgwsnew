@@ -103,17 +103,17 @@ export class CrownScraper {
       }
     );
 
-    // live 默认强制开启更多盘口，today/early 仍然由环境变量控制
-    const autoEnableForLive = this.account.showType === 'live';
-    this.enableMoreMarkets = this.resolveMoreMarketsFlag() || autoEnableForLive;
+    // live / today 默认强制开启更多盘口，early 仍然由环境变量控制
+    const autoEnableByShowType = this.account.showType === 'live' || this.account.showType === 'today';
+    this.enableMoreMarkets = this.resolveMoreMarketsFlag() || autoEnableByShowType;
     this.moreMarketsStartDelayMs = this.resolveStartDelay();
     this.moreMarketsIntervalMs = this.resolveThrottleInterval();
     this.maxConcurrentMoreMarkets = this.resolveConcurrentLimit();
 
     if (this.enableMoreMarkets) {
-      logger.info(`[${this.account.showType}] 已启用更多盘口抓取 (enableMoreMarkets=${this.enableMoreMarkets}, autoByShowType=${autoEnableForLive})`);
+      logger.info(`[${this.account.showType}] 已启用更多盘口抓取 (enableMoreMarkets=${this.enableMoreMarkets}, autoByShowType=${autoEnableByShowType})`);
     } else {
-      logger.info(`[${this.account.showType}] 未启用更多盘口抓取 (enableMoreMarkets=${this.enableMoreMarkets}, autoByShowType=${autoEnableForLive})`);
+      logger.info(`[${this.account.showType}] 未启用更多盘口抓取 (enableMoreMarkets=${this.enableMoreMarkets}, autoByShowType=${autoEnableByShowType})`);
     }
 
     // 添加请求拦截器来自动发送 Cookie
