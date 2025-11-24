@@ -1844,7 +1844,19 @@ export class CrownScraper {
 
       const applyGid = filterGamesForMatch(games);
 
-      for (const game of applyGid) {
+      // 角球盘口有时会挂在不同 gidm 下（例如 CN "-角球数"），但依旧属于同一场比赛。
+      // 为了不漏掉这些 CN 角球盘口，这里额外并入所有 isCornerMarket(game) 的记录，再去重。
+      const cornerGames = games.filter((g) => g && isCornerMarket(g));
+      const seen = new Set<any>();
+      const mergedGames: any[] = [];
+      for (const g of [...applyGid, ...cornerGames]) {
+        if (!g) continue;
+        if (seen.has(g)) continue;
+        seen.add(g);
+        mergedGames.push(g);
+      }
+
+      for (const game of mergedGames) {
         if (!game) continue;
         if (isCardMarket(game)) continue;
 
@@ -1921,6 +1933,7 @@ export class CrownScraper {
             'ratio_rouu',
             'ratio_ouo',
             'ratio_ouu',
+            'ratio_o',
             'ratio_hrouo',
             'ratio_hrouu',
             'ratio_houo',
