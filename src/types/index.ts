@@ -54,12 +54,20 @@ export interface Markets {
       draw?: number;
       away?: number;
     };
-
   };
   halfMoneyline?: {
     home?: number;
     draw?: number;
     away?: number;
+  };
+  // 角球盘口
+  cornerFull?: {
+    handicapLines?: HandicapLine[];
+    overUnderLines?: OverUnderLine[];
+  };
+  cornerHalf?: {
+    handicapLines?: HandicapLine[];
+    overUnderLines?: OverUnderLine[];
   };
 }
 

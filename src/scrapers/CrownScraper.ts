@@ -1700,21 +1700,42 @@ export class CrownScraper {
         return undefined;
       };
 
-      const isCardOrCornerMarket = (game: any): boolean => {
+      const isCardMarket = (game: any): boolean => {
         const mode = pickString(game, ['@_mode', 'mode']);
-        if (mode && ['CN', 'RN'].includes(mode.toUpperCase())) {
+        if (mode && mode.toUpperCase() === 'RN') {
           return true;
         }
 
         const ptype = pickString(game, ['@_ptype', 'ptype']);
-        if (ptype && /(角球|罰牌|罚牌)/.test(ptype)) {
+        if (ptype && /(罰牌|罚牌)/.test(ptype)) {
           return true;
         }
 
         const teamH = pickString(game, ['TEAM_H', 'team_h', 'TEAM_H_CN', 'team_h_cn']);
         const teamC = pickString(game, ['TEAM_C', 'team_c', 'TEAM_C_CN', 'team_c_cn']);
         const combined = `${teamH || ''}${teamC || ''}`;
-        if (/(角球|罰牌|罚牌)/.test(combined)) {
+        if (/(罰牌|罚牌)/.test(combined)) {
+          return true;
+        }
+
+        return false;
+      };
+
+      const isCornerMarket = (game: any): boolean => {
+        const mode = pickString(game, ['@_mode', 'mode']);
+        if (mode && mode.toUpperCase() === 'CN') {
+          return true;
+        }
+
+        const ptype = pickString(game, ['@_ptype', 'ptype']);
+        if (ptype && /角球/.test(ptype)) {
+          return true;
+        }
+
+        const teamH = pickString(game, ['TEAM_H', 'team_h', 'TEAM_H_CN', 'team_h_cn']);
+        const teamC = pickString(game, ['TEAM_C', 'team_c', 'TEAM_C_CN', 'team_c_cn']);
+        const combined = `${teamH || ''}${teamC || ''}`;
+        if (/角球/.test(combined)) {
           return true;
         }
 
@@ -1790,10 +1811,105 @@ export class CrownScraper {
 
       for (const game of applyGid) {
         if (!game) continue;
-        if (isCardOrCornerMarket(game)) continue;
+        if (isCardMarket(game)) continue;
 
         const strong = pickString(game, ['STRONG', 'strong']);
         const halfStrong = pickString(game, ['HSTRONG', 'hstrong']);
+
+        // 角球盘口：mode = CN 或 "-角球数" 的，单独解析到 cornerFull/cornerHalf
+        if (isCornerMarket(game)) {
+          const mode = (pickString(game, ['@_mode', 'mode']) || '').toUpperCase();
+          const halfFlag = /上半场|HOU_CN|HR_CN|^HOU$|^HR$/.test(
+            (pickString(game, ['@_rtype', 'rtype']) || '') +
+              (pickString(game, ['@_wtype', 'wtype']) || '') +
+              (pickString(game, ['@_ptype', 'ptype']) || ''),
+          );
+          const isHalf = halfFlag;
+
+          // 让球 - 全场/半场：R_CN / HR_CN
+          const ratioR = pickString(game, ['RATIO_RE', 'ratio_re', 'RE', 'R', 'ratio', 'hratio', 'ratio_hr']);
+          const iorRH = pickString(game, ['ior_REH', 'ior_RH', 'ior_HRH']);
+          const iorRC = pickString(game, ['ior_REC', 'ior_RC', 'ior_HRC']);
+          const swR = pickString(game, ['sw_RE', 'sw_R', 'sw_HR']);
+
+          const pushCornerHandicap = (hdp: number, homeRaw?: number, awayRaw?: number) => {
+            if (homeRaw === undefined || awayRaw === undefined) return;
+            const [home, away] = chgIorHK(homeRaw, awayRaw);
+            if (isHalf) {
+              markets.cornerHalf = markets.cornerHalf || { handicapLines: [], overUnderLines: [] };
+              markets.cornerHalf.handicapLines = markets.cornerHalf.handicapLines || [];
+              (markets.cornerHalf.handicapLines as any).push({ hdp, home, away, __meta: meta });
+            } else {
+              markets.cornerFull = markets.cornerFull || { handicapLines: [], overUnderLines: [] };
+              markets.cornerFull.handicapLines = markets.cornerFull.handicapLines || [];
+              (markets.cornerFull.handicapLines as any).push({ hdp, home, away, __meta: meta });
+            }
+          };
+
+          if (
+            ratioR &&
+            (iorRH || iorRC) &&
+            (!swR || swR.toUpperCase() === 'Y')
+          ) {
+            let hdp = this.parseHandicap(ratioR);
+            hdp = normalizeHdpWithStrong(hdp, ratioR, isHalf ? halfStrong : strong);
+            if (hdp !== null) {
+              const homeRaw = this.parseOddsValue(iorRH);
+              const awayRaw = this.parseOddsValue(iorRC);
+              pushCornerHandicap(hdp, homeRaw, awayRaw);
+            }
+          }
+
+          // 大小球 - 全场/半场：OU_CN / HOU_CN
+          const ratioO = pickString(game, [
+            'RATIO_ROUO',
+            'RATIO_ROUU',
+            'ratio_rouo',
+            'ratio_rouu',
+            'ratio_ouo',
+            'ratio_ouu',
+            'ratio_hrouo',
+            'ratio_hrouu',
+            'ratio_houo',
+            'ratio_houu',
+          ]);
+          const iorOUH = pickString(game, ['ior_ROUH', 'ior_OUH', 'ior_HROUH', 'ior_HOUH']);
+          const iorOUC = pickString(game, ['ior_ROUC', 'ior_OUC', 'ior_HROUC', 'ior_HOUC']);
+          const swOU = pickString(game, ['sw_ROU', 'sw_OU', 'sw_HROU', 'sw_HOU']);
+
+          const pushCornerOU = (hdp: number, overRaw?: number, underRaw?: number) => {
+            if (overRaw === undefined || underRaw === undefined) return;
+            const [over, under] = chgIorHK(overRaw, underRaw);
+            if (isHalf) {
+              markets.cornerHalf = markets.cornerHalf || { handicapLines: [], overUnderLines: [] };
+              markets.cornerHalf.overUnderLines = markets.cornerHalf.overUnderLines || [];
+              (markets.cornerHalf.overUnderLines as any).push({ hdp, over, under, __meta: meta });
+            } else {
+              markets.cornerFull = markets.cornerFull || { handicapLines: [], overUnderLines: [] };
+              markets.cornerFull.overUnderLines = markets.cornerFull.overUnderLines || [];
+              (markets.cornerFull.overUnderLines as any).push({ hdp, over, under, __meta: meta });
+            }
+          };
+
+          if (
+            ratioO &&
+            (iorOUH || iorOUC) &&
+            (!swOU || swOU.toUpperCase() === 'Y')
+          ) {
+            const hdp = this.parseHandicap(ratioO);
+            if (hdp !== null) {
+              const underVal = this.parseOddsValue(iorOUH);
+              const overVal = this.parseOddsValue(iorOUC);
+              if (underVal !== undefined && overVal !== undefined) {
+                pushCornerOU(hdp, overVal, underVal);
+              }
+            }
+          }
+
+          // corner 市场处理完，继续下一个 game
+          continue;
+        }
+
         const meta = {
           isMaster: pickString(game, ['ISMASTER', 'ismaster']),
           gopen: pickString(game, ['GOPEN', 'gopen']),
@@ -1955,6 +2071,64 @@ export class CrownScraper {
                 under,
                 __meta: meta,
               } as any);
+        // 半场大小球多盘口 - HOUH/HOUC 系列
+        // 例：
+        //   "sw_HOUH": "Y",
+        //   "ratio_houho": "0.5",
+        //   "ratio_houhu": "0.5",
+        //   "ior_HOUHO": "1.200",
+        //   "ior_HOUHU": "0.620",
+        //   "sw_HOUC": "Y",
+        //   "ratio_houco": "0.5",
+        //   "ratio_houcu": "0.5",
+        //   "ior_HOUCO": "1.130",
+        //   "ior_HOUCU": "0.690",
+        const swHOUH = pickString(game, ['sw_HOUH']);
+        const ratio_houho = pickString(game, ['ratio_houho']);
+        const ratio_houhu = pickString(game, ['ratio_houhu']);
+        const ior_HOUHO = pickString(game, ['ior_HOUHO']);
+        const ior_HOUHU = pickString(game, ['ior_HOUHU']);
+
+        const swHOUC = pickString(game, ['sw_HOUC']);
+        const ratio_houco = pickString(game, ['ratio_houco']);
+        const ratio_houcu = pickString(game, ['ratio_houcu']);
+        const ior_HOUCO = pickString(game, ['ior_HOUCO']);
+        const ior_HOUCU = pickString(game, ['ior_HOUCU']);
+
+        const pushHalfOU = (hdp: number, overRaw?: number, underRaw?: number) => {
+          if (!markets.half) {
+            markets.half = { handicapLines: [], overUnderLines: [] } as any;
+          }
+          const half = markets.half as any;
+          half.overUnderLines = half.overUnderLines || [];
+          if (overRaw === undefined || underRaw === undefined) return;
+          const [over, under] = chgIorHK(overRaw, underRaw);
+          half.overUnderLines.push({ hdp, over, under, __meta: meta });
+        };
+
+        if ((!swHOUH || swHOUH.toUpperCase() === 'Y') && (ratio_houho || ratio_houhu) && (ior_HOUHO || ior_HOUHU)) {
+          const ratioForHdp = ratio_houho || ratio_houhu;
+          const hdp = this.parseHandicap(ratioForHdp);
+          if (hdp !== null) {
+            const overRaw = this.parseOddsValue(ior_HOUHO);
+            const underRaw = this.parseOddsValue(ior_HOUHU);
+            if (overRaw !== undefined && underRaw !== undefined) {
+              pushHalfOU(hdp, overRaw, underRaw);
+            }
+          }
+        }
+
+        if ((!swHOUC || swHOUC.toUpperCase() === 'Y') && (ratio_houco || ratio_houcu) && (ior_HOUCO || ior_HOUCU)) {
+          const ratioForHdp = ratio_houco || ratio_houcu;
+          const hdp = this.parseHandicap(ratioForHdp);
+          if (hdp !== null) {
+            const overRaw = this.parseOddsValue(ior_HOUCO);
+            const underRaw = this.parseOddsValue(ior_HOUCU);
+            if (overRaw !== undefined && underRaw !== undefined) {
+              pushHalfOU(hdp, overRaw, underRaw);
+            }
+          }
+        }
             }
           }
         }
