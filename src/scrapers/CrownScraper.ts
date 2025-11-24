@@ -2329,12 +2329,20 @@ export class CrownScraper {
           }
         }
 
-        // 半场大小球盘口
+        // 半场大小球盘口（兼容更多字段，包括 ratio_ho/ratio_hu 这一类）
         const ratioHO = pickString(game, [
           'RATIO_HROUO',
           'RATIO_HROUU',
           'ratio_hrouo',
           'ratio_hrouu',
+          // 一些场次只给出 ratio_ho/ratio_hu（例如 gid=8315871 的半场 1.5）
+          'ratio_ho',
+          'ratio_hu',
+          // 兼容 HOU 风格字段
+          'ratio_houo',
+          'ratio_houu',
+          'RATIO_HOUO',
+          'RATIO_HOUU',
           'HROU',
           'HOU',
           'hratio_o',
