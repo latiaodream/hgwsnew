@@ -775,6 +775,18 @@ export class CrownScraper {
       moneyline: base.moneyline ? { ...base.moneyline } : undefined,
       full: base.full ? { ...base.full } : {},
       half: base.half ? { ...base.half } : {},
+      cornerFull: base.cornerFull
+        ? {
+            handicapLines: base.cornerFull.handicapLines ? [...base.cornerFull.handicapLines] : undefined,
+            overUnderLines: base.cornerFull.overUnderLines ? [...base.cornerFull.overUnderLines] : undefined,
+          }
+        : undefined,
+      cornerHalf: base.cornerHalf
+        ? {
+            handicapLines: base.cornerHalf.handicapLines ? [...base.cornerHalf.handicapLines] : undefined,
+            overUnderLines: base.cornerHalf.overUnderLines ? [...base.cornerHalf.overUnderLines] : undefined,
+          }
+        : undefined,
     };
 
     if (incoming.moneyline) {
@@ -833,6 +845,30 @@ export class CrownScraper {
       merged.half = merged.half || {};
       merged.half.handicapLines = mergeLineArray(merged.half.handicapLines, incoming.half.handicapLines);
       merged.half.overUnderLines = mergeLineArray(merged.half.overUnderLines, incoming.half.overUnderLines);
+    }
+
+    if (incoming.cornerFull) {
+      merged.cornerFull = merged.cornerFull || {};
+      merged.cornerFull.handicapLines = mergeLineArray(
+        merged.cornerFull.handicapLines,
+        incoming.cornerFull.handicapLines,
+      );
+      merged.cornerFull.overUnderLines = mergeLineArray(
+        merged.cornerFull.overUnderLines,
+        incoming.cornerFull.overUnderLines,
+      );
+    }
+
+    if (incoming.cornerHalf) {
+      merged.cornerHalf = merged.cornerHalf || {};
+      merged.cornerHalf.handicapLines = mergeLineArray(
+        merged.cornerHalf.handicapLines,
+        incoming.cornerHalf.handicapLines,
+      );
+      merged.cornerHalf.overUnderLines = mergeLineArray(
+        merged.cornerHalf.overUnderLines,
+        incoming.cornerHalf.overUnderLines,
+      );
     }
 
     return merged;
@@ -2400,6 +2436,13 @@ export class CrownScraper {
         );
         return; // 直接返回，不暂停账号
       case 'html_block':
+        // 如果只是 get_game_more 导致的 HTML 页面，不要整个账号冷却，减少误伤
+        if (context.startsWith('get_game_more/')) {
+          logger.warn(
+            `[${this.account.showType}] 返回非预期页面 (${context})，仅跳过本次更多盘口，不暂停账号`
+          );
+          return;
+        }
         duration = 5 * 60 * 1000;
         reason = '返回非预期页面';
         break;
