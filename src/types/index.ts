@@ -72,15 +72,29 @@ export interface Markets {
 }
 
 export interface HandicapLine {
-  hdp: number;
-  home: number;
-  away: number;
+	hdp: number;
+	home: number;
+	away: number;
+	/**
+	 * 行级盘口对应的皇冠 GID：
+	 * - 主盘口一般等于赛事 gid；
+	 * - 多盘口/角球盘口来自 get_game_more/get_game_OBT 的行级 gid；
+	 * 前端会将其作为 spread_gid 传给 /odds/preview -> FT_order_view。
+	 */
+	gid?: string;
+	/**
+	 * 解析更多盘口时附带的原始元信息（isMaster/gopen/mode 等），仅用于调试/排序。
+	 */
+	__meta?: any;
 }
 
 export interface OverUnderLine {
-  hdp: number;
-  over: number;
-  under: number;
+	hdp: number;
+	over: number;
+	under: number;
+	/** 行级盘口对应的皇冠 GID，用于下注预览时作为 spread_gid 传递 */
+	gid?: string;
+	__meta?: any;
 }
 
 // WebSocket 消息类型

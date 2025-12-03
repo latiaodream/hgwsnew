@@ -1455,11 +1455,17 @@ export class CrownScraper {
       return undefined;
     };
 
-    const markets: Markets = {};
+		const markets: Markets = {};
 
-    // NOTE: full-time handicap odds use HK conversion (chgIorHK) to match official UI.
+		//  gid  WSS  line.gid -> spread_gid  /odds/preview
+		const gidStr: string | undefined = (() => {
+			const v = pick(['gid', 'GID', '@_gid']);
+			return v !== undefined && v !== null ? String(v) : undefined;
+		})();
 
-    const strong = pick(['strong', 'STRONG']);
+		// NOTE: full-time handicap odds use HK conversion (chgIorHK) to match official UI.
+
+		const strong = pick(['strong', 'STRONG']);
     const halfStrong = pick(['hstrong', 'HSTRONG']);
     const ptype = pick(['ptype', 'PTYPE']);
     const ptypeMap = pick(['ptype_map', 'PTYPE_MAP']);
@@ -1488,7 +1494,7 @@ export class CrownScraper {
       const [home, away] = chgIorHK(homeRaw, awayRaw);
       const container = ensureContainer(markets, containerKey);
       container.handicapLines = container.handicapLines || [];
-      container.handicapLines.push({ hdp, home, away });
+		  container.handicapLines.push({ hdp, home, away, gid: gidStr });
     };
 
     const pushOU = (
@@ -1501,7 +1507,7 @@ export class CrownScraper {
       const [over, under] = chgIorHK(overRaw, underRaw);
       const container = ensureContainer(markets, containerKey);
       container.overUnderLines = container.overUnderLines || [];
-      container.overUnderLines.push({ hdp, over, under });
+		  container.overUnderLines.push({ hdp, over, under, gid: gidStr });
     };
 
     // 独赢（Moneyline）- 使用小写字段名
@@ -1606,16 +1612,21 @@ export class CrownScraper {
       pushOU(halfKey, hdp, overRaw, underRaw);
     }
 
-    // 半场独赢（Half-time Moneyline）
-    const hmh = pick(['ior_hmh', 'ratio_hmh']);
-    const hmn = pick(['ior_hmn', 'ratio_hmn']);
-    const hmc = pick(['ior_hmc', 'ratio_hmc']);
+	    // 半场独赢（Half-time Moneyline）
+	    // 兼容：
+	    // - 今日/早盘：IOR_HMH / IOR_HMC / IOR_HMN（对应 ior_hmh 等）
+	    // - 滚球半场：IOR_HRMH / IOR_HRMC / IOR_HRMN（对应 ior_hrmh 等）
+	    const hmh = pick(['ior_hrmh', 'ior_hmh', 'ratio_hrmh', 'ratio_hmh']);
+	    const hmn = pick(['ior_hrmn', 'ior_hmn', 'ratio_hrmn', 'ratio_hmn']);
+	    const hmc = pick(['ior_hrmc', 'ior_hmc', 'ratio_hrmc', 'ratio_hmc']);
 
     if (hmh || hmn || hmc) {
       const halfMoneyline = {
         home: this.parseOddsValue(hmh),
         draw: this.parseOddsValue(hmn),
         away: this.parseOddsValue(hmc),
+        // 行级 gid：用于半场独赢调用 FT_order_view 时使用正确的盘口 gid
+        gid: gidStr,
       };
 
       // 同时填充到 top-level 和 half 里，方便前端使用 markets.half.moneyline
@@ -1626,20 +1637,24 @@ export class CrownScraper {
     }
 
 
-    // 在离开前对盘口数组做一次去重，避免 get_game_list 自身产生的重复盘
-    const dedupeLines = <T>(arr?: T[]): T[] | undefined => {
-      if (!arr || !arr.length) return arr;
-      const seen = new Set<string>();
-      const result: T[] = [];
-      for (const item of arr) {
-        if (item == null) continue;
-        const key = JSON.stringify(item);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        result.push(item);
-      }
-      return result;
-    };
+	    // 在离开前对盘口数组做一次去重，避免 get_game_list 自身产生的重复盘
+	    const dedupeLines = <T>(arr?: T[]): T[] | undefined => {
+	      if (!arr || !arr.length) return arr;
+	      const seen = new Set<string>();
+	      const result: T[] = [];
+	      for (const item of arr) {
+	        if (item == null) continue;
+	        // 去重时忽略 gid/__meta，避免同一盘口因为行级 gid 不同被视为不同记录
+	        const base: any = { ...(item as any) };
+	        delete base.gid;
+	        delete base.__meta;
+	        const key = JSON.stringify(base);
+	        if (seen.has(key)) continue;
+	        seen.add(key);
+	        result.push(item);
+	      }
+	      return result;
+	    };
 
     if (markets.full) {
       markets.full.handicapLines = dedupeLines(markets.full.handicapLines);
@@ -1862,26 +1877,28 @@ export class CrownScraper {
       const cornerGames = games.filter((g) => g && isCornerMarket(g));
       const seen = new Set<any>();
       const mergedGames: any[] = [];
-      for (const g of [...applyGid, ...cornerGames]) {
+	      for (const g of [...applyGid, ...cornerGames]) {
         if (!g) continue;
         if (seen.has(g)) continue;
         seen.add(g);
         mergedGames.push(g);
       }
 
-      for (const game of mergedGames) {
+	      for (const game of mergedGames) {
         if (!game) continue;
         if (isCardMarket(game)) continue;
 
         const strong = pickString(game, ['STRONG', 'strong']);
         const halfStrong = pickString(game, ['HSTRONG', 'hstrong']);
+	        const lineGid = pickString(game, ['gid', 'GID', '@_gid']) || targetGid;
 
-        const meta = {
+	        const meta = {
           isMaster: pickString(game, ['ISMASTER', 'ismaster', 'MASTER', 'master']),
           gopen: pickString(game, ['GOPEN', 'gopen']),
           hnike: pickString(game, ['HNIKE', 'hnike']),
           model: pickString(game, ['model', 'MODEL', '@_model']),
-          mode: pickString(game, ['@_mode', 'mode']),
+	          mode: pickString(game, ['@_mode', 'mode']),
+	          gid: lineGid,
         };
 
         // 角球盘口：mode = CN 或 "-角球数" 的，单独解析到 cornerFull/cornerHalf
@@ -1894,42 +1911,42 @@ export class CrownScraper {
           );
           const isHalfByFlag = halfFlag;
 
-          const pushCornerHandicap = (
+	          const pushCornerHandicap = (
             isHalfLine: boolean,
             hdp: number,
             homeRaw?: number,
             awayRaw?: number,
           ) => {
-            if (homeRaw === undefined || awayRaw === undefined) return;
-            const [home, away] = chgIorHK(homeRaw, awayRaw);
-            if (isHalfLine) {
-              markets.cornerHalf = markets.cornerHalf || { handicapLines: [], overUnderLines: [] };
-              markets.cornerHalf.handicapLines = markets.cornerHalf.handicapLines || [];
-              (markets.cornerHalf.handicapLines as any).push({ hdp, home, away, __meta: meta });
-            } else {
-              markets.cornerFull = markets.cornerFull || { handicapLines: [], overUnderLines: [] };
-              markets.cornerFull.handicapLines = markets.cornerFull.handicapLines || [];
-              (markets.cornerFull.handicapLines as any).push({ hdp, home, away, __meta: meta });
-            }
+	            if (homeRaw === undefined || awayRaw === undefined) return;
+	            const [home, away] = chgIorHK(homeRaw, awayRaw);
+	            if (isHalfLine) {
+	              markets.cornerHalf = markets.cornerHalf || { handicapLines: [], overUnderLines: [] };
+	              markets.cornerHalf.handicapLines = markets.cornerHalf.handicapLines || [];
+	              (markets.cornerHalf.handicapLines as any).push({ hdp, home, away, gid: lineGid, __meta: meta });
+	            } else {
+	              markets.cornerFull = markets.cornerFull || { handicapLines: [], overUnderLines: [] };
+	              markets.cornerFull.handicapLines = markets.cornerFull.handicapLines || [];
+	              (markets.cornerFull.handicapLines as any).push({ hdp, home, away, gid: lineGid, __meta: meta });
+	            }
           };
 
-          const pushCornerOU = (
+	          const pushCornerOU = (
             isHalfLine: boolean,
             hdp: number,
             overRaw?: number,
             underRaw?: number,
           ) => {
-            if (overRaw === undefined || underRaw === undefined) return;
-            const [over, under] = chgIorHK(overRaw, underRaw);
-            if (isHalfLine) {
-              markets.cornerHalf = markets.cornerHalf || { handicapLines: [], overUnderLines: [] };
-              markets.cornerHalf.overUnderLines = markets.cornerHalf.overUnderLines || [];
-              (markets.cornerHalf.overUnderLines as any).push({ hdp, over, under, __meta: meta });
-            } else {
-              markets.cornerFull = markets.cornerFull || { handicapLines: [], overUnderLines: [] };
-              markets.cornerFull.overUnderLines = markets.cornerFull.overUnderLines || [];
-              (markets.cornerFull.overUnderLines as any).push({ hdp, over, under, __meta: meta });
-            }
+	            if (overRaw === undefined || underRaw === undefined) return;
+	            const [over, under] = chgIorHK(overRaw, underRaw);
+	            if (isHalfLine) {
+	              markets.cornerHalf = markets.cornerHalf || { handicapLines: [], overUnderLines: [] };
+	              markets.cornerHalf.overUnderLines = markets.cornerHalf.overUnderLines || [];
+	              (markets.cornerHalf.overUnderLines as any).push({ hdp, over, under, gid: lineGid, __meta: meta });
+	            } else {
+	              markets.cornerFull = markets.cornerFull || { handicapLines: [], overUnderLines: [] };
+	              markets.cornerFull.overUnderLines = markets.cornerFull.overUnderLines || [];
+	              (markets.cornerFull.overUnderLines as any).push({ hdp, over, under, gid: lineGid, __meta: meta });
+	            }
           };
 
           // 让球 - OUC 角球，让球盘口（主要用于滚球，非 CN）
@@ -2082,7 +2099,8 @@ export class CrownScraper {
                 hdp,
                 home,
                 away,
-                __meta: meta,
+	        	        gid: lineGid,
+	        	        __meta: meta,
               } as any);
             }
           }
@@ -2127,7 +2145,8 @@ export class CrownScraper {
                 hdp: hdpAlt,
                 home,
                 away,
-                __meta: meta,
+	        	        gid: lineGid,
+	        	        __meta: meta,
               } as any);
             }
           }
@@ -2161,7 +2180,8 @@ export class CrownScraper {
                 hdp,
                 over,
                 under,
-                __meta: meta,
+	        	        gid: lineGid,
+	        	        __meta: meta,
               } as any);
             }
           }
@@ -2203,12 +2223,13 @@ export class CrownScraper {
             if (underVal !== undefined && overVal !== undefined) {
               const [over, under] = chgIorHK(overVal, underVal);
               markets.full!.overUnderLines = markets.full!.overUnderLines || [];
-              markets.full!.overUnderLines!.push({
-                hdp: hdpAltO,
-                over,
-                under,
-                __meta: meta,
-              } as any);
+	              markets.full!.overUnderLines!.push({
+	                hdp: hdpAltO,
+	                over,
+	                under,
+	                gid: lineGid,
+	                __meta: meta,
+	              } as any);
         // 半场大小球多盘口 - HOUH/HOUC 系列
         // 例：
         //   "sw_HOUH": "Y",
@@ -2233,15 +2254,15 @@ export class CrownScraper {
         const ior_HOUCO = pickString(game, ['ior_HOUCO']);
         const ior_HOUCU = pickString(game, ['ior_HOUCU']);
 
-        const pushHalfOU = (hdp: number, overRaw?: number, underRaw?: number) => {
+	        const pushHalfOU = (hdp: number, overRaw?: number, underRaw?: number) => {
           if (!markets.half) {
             markets.half = { handicapLines: [], overUnderLines: [] } as any;
           }
           const half = markets.half as any;
           half.overUnderLines = half.overUnderLines || [];
           if (overRaw === undefined || underRaw === undefined) return;
-          const [over, under] = chgIorHK(overRaw, underRaw);
-          half.overUnderLines.push({ hdp, over, under, __meta: meta });
+	          const [over, under] = chgIorHK(overRaw, underRaw);
+	          half.overUnderLines.push({ hdp, over, under, gid: lineGid, __meta: meta });
         };
 
         if ((!swHOUH || swHOUH.toUpperCase() === 'Y') && (ratio_houho || ratio_houhu) && (ior_HOUHO || ior_HOUHU)) {
@@ -2281,20 +2302,21 @@ export class CrownScraper {
 	          const iorPlainOUC = pickString(game, ['ior_OUC']);
 	          if (ratioPlainO && (iorPlainOUH || iorPlainOUC)) {
 	            const hdpPlainO = this.parseHandicap(ratioPlainO);
-	            if (hdpPlainO !== null) {
-	              const underVal = this.parseOddsValue(iorPlainOUH);
-	              const overVal = this.parseOddsValue(iorPlainOUC);
-	              if (underVal !== undefined && overVal !== undefined) {
-	                const [over, under] = chgIorHK(overVal, underVal);
-	                markets.full!.overUnderLines = markets.full!.overUnderLines || [];
-	                markets.full!.overUnderLines!.push({
-	                  hdp: hdpPlainO,
-	                  over,
-	                  under,
-	                  __meta: meta,
-	                } as any);
-	              }
-	            }
+		        	  if (hdpPlainO !== null) {
+		        	    const underVal = this.parseOddsValue(iorPlainOUH);
+		        	    const overVal = this.parseOddsValue(iorPlainOUC);
+		        	    if (underVal !== undefined && overVal !== undefined) {
+		        	      const [over, under] = chgIorHK(overVal, underVal);
+		        	      markets.full!.overUnderLines = markets.full!.overUnderLines || [];
+		        	      markets.full!.overUnderLines!.push({
+		        	        hdp: hdpPlainO,
+		        	        over,
+		        	        under,
+		        	        gid: lineGid,
+		        	        __meta: meta,
+		        	      } as any);
+		        	    }
+		        	  }
 	          }
 	        }
 
@@ -2323,7 +2345,8 @@ export class CrownScraper {
                 hdp,
                 home,
                 away,
-                __meta: meta,
+	        	        gid: lineGid,
+	        	        __meta: meta,
               } as any);
             }
           }
@@ -2369,7 +2392,8 @@ export class CrownScraper {
                 hdp,
                 over,
                 under,
-                __meta: meta,
+	        	        gid: lineGid,
+	        	        __meta: meta,
               } as any);
             }
           }
